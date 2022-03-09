@@ -10,9 +10,7 @@ from string import hexdigits
 
 import jsonschema
 import yaml
-from charms.vsphere_cloud_provider_operator.v0.lightkube_helpers import (
-    LightKubeHelpers,
-)
+from charms.vsphere_cloud_provider_operator.v0.lightkube_helpers import LightKubeHelpers
 from charms.vsphere_cloud_provider_operator.v0.vsphere_integration import (
     VsphereIntegrationRequires,
 )

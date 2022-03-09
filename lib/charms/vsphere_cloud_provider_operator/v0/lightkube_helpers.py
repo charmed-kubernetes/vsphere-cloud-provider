@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 """Helpers to make working with lightkube a little easier."""
 import logging
+
 from lightkube import Client
 from lightkube.core.exceptions import ApiError
 
@@ -26,10 +27,14 @@ class LightKubeHelpers:
         self.client = Client(namespace=default_namespace, field_manager="lightkube")
 
     def apply_resources(self, resources):
+        """Create or update a resource."""
         for obj in resources:
             self.client.apply(obj, namespace=obj.namespace)
 
-    def delete_resources(self, resources, namespace=None, ignore_not_found=False, ignore_unauthorized=False):
+    def delete_resources(
+        self, resources, namespace=None, ignore_not_found=False, ignore_unauthorized=False
+    ):
+        """Delete a resource."""
         for obj in resources:
             self.delete_resource(
                 type(obj),
@@ -40,12 +45,12 @@ class LightKubeHelpers:
             )
 
     def delete_resource(
-            self,
-            resource_type,
-            name,
-            namespace=None,
-            ignore_not_found=False,
-            ignore_unauthorized=False,
+        self,
+        resource_type,
+        name,
+        namespace=None,
+        ignore_not_found=False,
+        ignore_unauthorized=False,
     ):
         """Delete a resource."""
         try:
