@@ -1,0 +1,26 @@
+# This is the schema for validating the data used in rendering the
+# `cloud-config` secret. In particular, it ensures that we have at
+# least one complete set of auth data available.
+type: object
+oneOf:
+  - required:
+    - server
+    - username
+    - password
+    - datacenter
+    - control-node-selector
+properties:
+  server:
+    type: string
+  username:
+    type: string
+  password:
+    type: string
+  datacenter:
+    type: string
+  control-node-selector:
+    type: object
+    additionalProperties:
+      type: string
+
+

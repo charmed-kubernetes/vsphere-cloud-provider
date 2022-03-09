@@ -18,11 +18,11 @@ def test_render_all(request):
         control_node_selector={"juju-application": "kubernetes-control-plane"},
     )
     rendered = [
-        templates.config_map,
-        templates.provider,
-        templates.role_bindings,
-        templates.roles,
-        templates.secret,
+        templates.config_map.yaml,
+        templates.provider.yaml,
+        templates.role_bindings.yaml,
+        templates.roles.yaml,
+        templates.secret.yaml,
     ]
     expected = (DATA_PATH / "rendered-templates.yaml").read_text()
     assert "\n".join(rendered) + "\n" == expected

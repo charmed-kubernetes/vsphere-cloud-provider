@@ -6,14 +6,19 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: vsphere-cloud-config
   labels:
-    juju-application: {{ juju_app }}
+    vsphere-cpi-infra: config
+    component: cloud-controller-manager
+    app.juju.is/created-by: {{ juju_app }}
+  namespace: kube-system
 data:
   cpi-vsphere.conf: |
     [Global]
     port = "443"
-    insecure-flag = "true" #Optional. Please tweak based on setup.
-    secret-name = "cpi-global-secret"
+    # set insecureFlag to true if the vCenter uses a self-signed cert
+    insecure-flag = "true"
+    secret-name = "vsphere-cloud-secret"
     secret-namespace = "kube-system"
     [VirtualCenter "{{ server }}"]
     datacenters = "{{ datacenter }}"

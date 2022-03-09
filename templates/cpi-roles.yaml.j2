@@ -10,8 +10,10 @@ items:
   kind: ClusterRole
   metadata:
     name: system:cloud-controller-manager
-    label:
-      juju-application: {{ juju_app }}
+    labels:
+      vsphere-cpi-infra: role
+      component: cloud-controller-manager
+      app.juju.is/created-by: {{ juju_app }}
   rules:
   - apiGroups:
     - ""

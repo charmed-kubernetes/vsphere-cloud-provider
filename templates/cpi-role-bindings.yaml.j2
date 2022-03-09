@@ -10,9 +10,11 @@ items:
   kind: RoleBinding
   metadata:
     name: servicecatalog.k8s.io:apiserver-authentication-reader
+    labels:
+      vsphere-cpi-infra: role-binding
+      component: cloud-controller-manager
+      app.juju.is/created-by: {{ juju_app }}
     namespace: kube-system
-    label:
-      juju-application: {{ juju_app }}
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: Role
@@ -29,8 +31,10 @@ items:
   kind: ClusterRoleBinding
   metadata:
     name: system:cloud-controller-manager
-    label:
-      juju-application: {{ juju_app }}
+    labels:
+      vsphere-cpi-infra: cluster-role-binding
+      component: cloud-controller-manager
+      app.juju.is/created-by: {{ juju_app }}
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: ClusterRole

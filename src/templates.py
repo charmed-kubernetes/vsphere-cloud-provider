@@ -5,9 +5,37 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 
+import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from lightkube import codecs
 
 base_path = Path(__file__).parent.parent
+
+
+@dataclass
+class Resource:
+    """Represents kubernetes resource objects as yaml or lightkube resources."""
+
+    yaml: str
+
+    @staticmethod
+    def _fix_generic_list(manifest):
+        # The kubectl CLI will automatically translate "kind: List" into a
+        # concrete list type, but lightkube won't.
+        # See the note at https://kubernetes.io/docs/reference/using-api/api-concepts/#collections
+        resources = yaml.safe_load_all(manifest)
+        for resource in resources:
+            if resource["kind"] == "List":
+                item_kind = resource["items"][0]["kind"]
+                concrete_list = f"{item_kind}List"
+                resource["kind"] = concrete_list
+        return yaml.safe_dump_all(resources)
+
+    @property
+    def lightkube(self):
+        """Resolve the yaml to a list of lightkube objects."""
+        resources = Resource._fix_generic_list(self.yaml)
+        return codecs.load_all_yaml(resources)
 
 
 @dataclass
@@ -36,29 +64,29 @@ class TemplateEngine:
         )
         env = Environment(loader=self._loader, autoescape=select_autoescape())
         template = env.get_template(template_name)
-        return template.render(**variables)
+        return Resource(template.render(**variables))
 
     @property
-    def config_map(self):
+    def config_map(self) -> Resource:
         """Yields yaml for configuring the provider."""
         return self._load("cpi-config-map.yaml.j2")
 
     @property
-    def provider(self):
+    def provider(self) -> Resource:
         """Yields yaml for configuring the ServiceAccount, DaemonSet, and Service."""
         return self._load("cpi-provider.yaml.j2")
 
     @property
-    def role_bindings(self):
+    def role_bindings(self) -> Resource:
         """Yields yaml for configuring the RoleBinding and ClusterRoleBinding."""
         return self._load("cpi-role-bindings.yaml.j2")
 
     @property
-    def roles(self):
+    def roles(self) -> Resource:
         """Yields yaml for configuring the ClusterRole."""
         return self._load("cpi-roles.yaml.j2")
 
     @property
-    def secret(self):
+    def secret(self) -> Resource:
         """Yields yaml for configuring the vsphere Secret."""
         return self._load("cpi-secret.yaml.j2")
