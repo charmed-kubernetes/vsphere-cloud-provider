@@ -1,0 +1,44 @@
+### cpi-role-bindings.yaml
+###    Originally sourced from
+###    https://raw.githubusercontent.com/kubernetes/cloud-provider-vsphere/master/manifests/controller-manager/cloud-controller-manager-role-bindings.yaml
+###    str juju_app : name of deployed application
+---
+apiVersion: v1
+kind: List
+items:
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: servicecatalog.k8s.io:apiserver-authentication-reader
+    namespace: kube-system
+    label:
+      juju-application: {{ juju_app }}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: extension-apiserver-authentication-reader
+  subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: cloud-controller-manager
+    namespace: kube-system
+  - apiGroup: ""
+    kind: User
+    name: cloud-controller-manager
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRoleBinding
+  metadata:
+    name: system:cloud-controller-manager
+    label:
+      juju-application: {{ juju_app }}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: system:cloud-controller-manager
+  subjects:
+  - kind: ServiceAccount
+    name: cloud-controller-manager
+    namespace: kube-system
+  - kind: User
+    name: cloud-controller-manager
+metadata: {}

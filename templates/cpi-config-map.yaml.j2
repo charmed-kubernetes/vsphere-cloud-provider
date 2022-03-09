@@ -1,0 +1,19 @@
+### cpi-config-map.yaml
+###    str juju_app   : name of deployed application
+###    str server     : ip address or fqdn of vsphere endpoint
+###    str datacenter : vsphere virtual datacenter
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    juju-application: {{ juju_app }}
+data:
+  cpi-vsphere.conf: |
+    [Global]
+    port = "443"
+    insecure-flag = "true" #Optional. Please tweak based on setup.
+    secret-name = "cpi-global-secret"
+    secret-namespace = "kube-system"
+    [VirtualCenter "{{ server }}"]
+    datacenters = "{{ datacenter }}"

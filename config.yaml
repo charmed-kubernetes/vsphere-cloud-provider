@@ -1,0 +1,38 @@
+options:
+  # Global options
+  server:
+    description: >-
+      Required if not related to the vSphere Integrator. vSphere ip address
+      e.g. `128.110.154.166`
+    type: string
+
+  username:
+    description: >-
+      Required if not related to the vSphere Integrator. vSphere username
+    type: string
+
+  password:
+    description: >-
+      Required if not related to the vSphere Integrator. vSphere password
+    type: string
+
+  datacenter:
+    description: >-
+      Required if not related to the vSphere Integrator. vSphere datacenter
+    type: string
+
+  image:
+    description: >-
+      image to use by the vsphere cloud controller manager
+    default: "gcr.io/cloud-provider-vsphere/cpi/release/manager:latest"
+    type: string
+  control_node_selector:
+    description: >-
+      Specifies to which nodes this operator adds the vsphere-cpi daemonsets
+      Declare node labels in key=value format, separated by spaces.
+
+      Required if not related to kubernetes-control-plane:external-cloud-provider
+
+      e.g. 
+        node-role.kubernetes.io/control-plane=""
+    type: string
