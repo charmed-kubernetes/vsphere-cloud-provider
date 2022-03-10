@@ -3,7 +3,7 @@
 """Implementation logic for the vSphere CPI operator charm."""
 
 import logging
-from dataclasses import dataclass
+from collections import defaultdict
 from pathlib import Path
 from random import choices
 from string import hexdigits
@@ -11,14 +11,9 @@ from string import hexdigits
 import jsonschema
 import yaml
 from charms.vsphere_cloud_provider_operator.v0.lightkube_helpers import LightKubeHelpers
-from charms.vsphere_cloud_provider_operator.v0.vsphere_integration import (
-    VsphereIntegrationRequires,
-)
 from lightkube.models.apps_v1 import DaemonSet
-from lightkube.resources.core_v1 import Secret
 from ops.charm import RelationBrokenEvent
 from ops.framework import Object
-from ops.model import Relation
 
 from templates import TemplateEngine
 
@@ -36,32 +31,29 @@ class CharmBackend(Object):
         self.lk_helpers = LightKubeHelpers(charm)
 
     @property
-    def integrator(self) -> VsphereIntegrationRequires:
-        """Shortcut to `self.charm.integrator`."""
-        return self.charm.integrator
-
-    @property
-    def external_cloud_provider(self) -> Relation:
-        """Shortcut to `self.charm.external_cloud_provider`."""
-        return self.charm.external_cloud_provider
-
-    @property
-    def config(self):
-        """Shortcut to `self.charm.config`."""
-        return self.charm.config
-
-    @property
     def app(self):
         """Shortcut to `self.charm.app`."""
         return self.charm.app
 
-    def apply(self):
-        """Apply all of the upstream manifests."""
-        for manifest in self.manifests.glob("**/*.yaml"):
-            if "secret" in manifest.name:
-                # The upstream secret contains dummy data, so skip it.
-                continue
-            self.lk_helpers.apply_manifest(manifest)
+    def _templates(self, config):
+        return TemplateEngine(
+            juju_app=self.app.name,
+            control_node_selector=config["control-node-selector"],
+            server=config["server"],
+            username=config["username"],
+            password=config["password"],
+            datacenter=config["datacenter"],
+            image=self.charm.config.get("image"),
+        )
+
+    def apply_statics(self):
+        """Apply templates which don't depend on relation or config."""
+        templates = self._templates(defaultdict(str))
+        self.lk_helpers.apply_resources(
+            templates.role_bindings.lightkube
+            + templates.roles.lightkube
+            + templates.service.lightkube
+        )
 
     def restart(self):
         """Restart the VCCM DaemonSet."""
@@ -81,79 +73,74 @@ class CharmBackend(Object):
         self.lk_helpers.client.patch(DaemonSet, "vsphere-cloud-controller-manager", ds)
 
     def remove(self):
-        """Remove all of the components from the upstream manifests."""
-        for manifest in self.manifests.glob("**/*.yaml"):
-            self.lk_helpers.delete_manifest(manifest, ignore_unauthorized=True)
-
-    def build_cloud_config(self):
-        """Build a set of cloud config params based on config and relation data."""
-        return CharmConfig.load(self)
+        """Remove all the static components."""
+        templates = self._templates(defaultdict(str))
+        self.lk_helpers.delete_resources(
+            templates.role_bindings.lightkube
+            + templates.roles.lightkube
+            + templates.service.lightkube,
+            ignore_unauthorized=True,
+        )
 
     def apply_cloud_config(self, cloud_config):
-        """Create or update the `cloud-config` Secret resource."""
+        """Create or update the `cloud-config` resources."""
         config = cloud_config.properties
-        templates = TemplateEngine(
-            juju_app=self.app.name,
-            control_node_selector=config["control-node-selector"],
-            server=config["server"],
-            username=config["username"],
-            password=config["password"],
-            datacenter=config["datacenter"],
-            image=self.config.get("image"),
+        templates = self._templates(config)
+        self.lk_helpers.apply_resources(
+            templates.secret.lightkube
+            + templates.config_map.lightkube
+            + templates.daemonset.lightkube
         )
-        self.lk_helpers.apply_resources(templates.secret.lightkube)
 
     def delete_cloud_config(self):
-        """Remove the `cloud-config` Secret resource, if we created it."""
-        secrets = self.lk_helpers.client.list(
-            Secret,
-            namespace="kube-control",
-            labels={"app.juju.is/created-by": f"{self.app.name}"},
-            fields={"metadata.name": "cloud-config"},
-        )
-        if not secrets:
-            return
-        self.lk_helpers.delete_resource(
-            Secret,
-            name="cloud-config",
-            namespace="kube-system",
+        """Remove the `cloud-config` resources, if we created it."""
+        templates = self._templates(defaultdict(str))
+        resources = (
+            templates.secret.lightkube
+            + templates.config_map.lightkube
+            + templates.daemonset.lightkube
         )
 
+        for resource in resources:
+            obj = self.lk_helpers.client.list(
+                type(resource),
+                namespace=resource.metadata.namespace,
+                labels={"app.juju.is/created-by": f"{self.app.name}"},
+                fields={"metadata.name": resource.metadata.name},
+            )
+            if not obj:
+                continue
 
-@dataclass
+            self.lk_helpers.delete_resource(
+                type(resource), namespace=resource.metadata.namespace, name=resource.metadata.name
+            )
+
+
 class CharmConfig:
     """Representation of the required charm configuration."""
 
-    properties: dict
-    backend: CharmBackend
     _schema = yaml.safe_load(Path("schemas", "config-schema.yaml").read_text())
 
-    @classmethod
-    def load(cls, backend: CharmBackend):
+    def __init__(self, charm):
         """Creates a CharmConfig object from relation and configuration data."""
         cloud_config = {
-            "server": backend.integrator.vsphere_ip,
-            "username": backend.integrator.user,
-            "password": backend.integrator.password,
-            "datacenter": backend.integrator.datacenter,
-            **{k: backend.config[k] for k in cls._schema["properties"] if backend.config.get(k)},
+            "server": charm.integrator.vsphere_ip,
+            "username": charm.integrator.user,
+            "password": charm.integrator.password,
+            "datacenter": charm.integrator.datacenter,
+            **{k: charm.config[k] for k in self._schema["properties"] if charm.config.get(k)},
         }
 
-        if not cloud_config.get("control-node-selector") and backend.external_cloud_provider:
+        if not cloud_config.get("control-node-selector") and charm.control_plane_relation:
             cloud_config[
                 "control-node-selector"
-            ] = f"juju-application={backend.external_cloud_provider.app.name}"
+            ] = f"juju-application={charm.control_plane_relation.app.name}"
 
         # Clear out empty / null values.
-        for key, value in {
-            **cloud_config,
-        }.items():
+        for key, value in dict(**cloud_config).items():
             if value == "" or value is None:
                 del cloud_config[key]
-        return cls._transform_cloud_config(cloud_config, backend)
 
-    @classmethod
-    def _transform_cloud_config(cls, cloud_config, backend: CharmBackend):
         value = cloud_config.get("control-node-selector")
         if value is not None:
             updated = cloud_config["control-node-selector"] = {}
@@ -164,14 +151,16 @@ class CharmConfig:
                     log.warning(f"Skipping invalid label {label}")
                 else:
                     updated[key] = value
-        return cls(cloud_config, backend)
+
+        self.properties = cloud_config
+        self.charm = charm
 
     def evaluate_relation(self, event):
         """Determine if configuration is missing by a specific relation."""
         props = ["server", "username", "password", "datacenter"]
-        no_relation = not self.backend.integrator.relation or (
+        no_relation = not self.charm.integrator.relation or (
             isinstance(event, RelationBrokenEvent)
-            and event.relation is self.backend.integrator.relation
+            and event.relation is self.charm.integrator.relation
         )
         if any(prop not in self.properties for prop in props):
             if no_relation:
@@ -179,9 +168,9 @@ class CharmConfig:
             return "Waiting for integrator"
 
         props = ["control-node-selector"]
-        no_relation = not self.backend.external_cloud_provider or (
+        no_relation = not self.charm.control_plane_relation or (
             isinstance(event, RelationBrokenEvent)
-            and event.relation is self.backend.external_cloud_provider
+            and event.relation is self.charm.control_plane_relation
         )
         if any(prop not in self.properties for prop in props):
             if no_relation:

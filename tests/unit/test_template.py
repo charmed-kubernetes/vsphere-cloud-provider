@@ -19,7 +19,8 @@ def test_render_all(request):
     )
     rendered = [
         templates.config_map.yaml,
-        templates.provider.yaml,
+        templates.daemonset.yaml,
+        templates.service.yaml,
         templates.role_bindings.yaml,
         templates.roles.yaml,
         templates.secret.yaml,

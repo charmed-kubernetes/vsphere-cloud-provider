@@ -22,20 +22,10 @@ data:
     secret-namespace = "kube-system"
     [VirtualCenter "1.2.3.4"]
     datacenters = "dc1"
-### cpi-provider.yaml
+### cpi-daemonset.yaml
 ###    str juju_app      : name of deployed application
 ###    str node_selector : label which targets control-plane nodes
 ###    str image         : vsphere CCM image
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: cloud-controller-manager
-  labels:
-    vsphere-cpi-infra: service-account
-    component: cloud-controller-manager
-    app.juju.is/created-by: test_render_all
-  namespace: kube-system
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -96,6 +86,18 @@ spec:
       - name: vsphere-config-volume
         configMap:
           name: cloud-config
+### cpi-service.yaml
+###    str juju_app      : name of deployed application
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cloud-controller-manager
+  labels:
+    vsphere-cpi-infra: service-account
+    component: cloud-controller-manager
+    app.juju.is/created-by: test_render_all
+  namespace: kube-system
 ---
 apiVersion: v1
 kind: Service
@@ -113,7 +115,6 @@ spec:
       targetPort: 43001
   selector:
     component: cloud-controller-manager
----
 ### cpi-role-bindings.yaml
 ###    Originally sourced from
 ###    https://raw.githubusercontent.com/kubernetes/cloud-provider-vsphere/master/manifests/controller-manager/cloud-controller-manager-role-bindings.yaml

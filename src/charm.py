@@ -6,6 +6,7 @@
 import json
 import logging
 from hashlib import md5
+from typing import Optional
 
 from charms.vsphere_cloud_provider_operator.v0.vsphere_integration import (
     VsphereIntegrationRequires,
@@ -13,9 +14,15 @@ from charms.vsphere_cloud_provider_operator.v0.vsphere_integration import (
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
+from ops.model import (
+    ActiveStatus,
+    BlockedStatus,
+    MaintenanceStatus,
+    Relation,
+    WaitingStatus,
+)
 
-from backend import CharmBackend
+from backend import CharmBackend, CharmConfig
 
 log = logging.getLogger(__name__)
 
@@ -51,13 +58,13 @@ class VsphereCloudProviderCharm(CharmBase):
         self.framework.observe(self.on.stop, self._cleanup)
 
     @property
-    def external_cloud_provider(self):
-        """Representation of the external cloud provider relation."""
+    def control_plane_relation(self) -> Optional[Relation]:
+        """Find a control-plane-node external-cloud-provider relation."""
         return self.model.get_relation("external-cloud-provider")
 
     def _check_config(self, event=None):
         self.unit.status = MaintenanceStatus("Updating cloud-config")
-        cloud_config = self.backend.build_cloud_config()
+        cloud_config = CharmConfig(self)
         evaluation = cloud_config.evaluate_relation(event)
         if evaluation:
             self.stored.config_hash = None
@@ -89,7 +96,7 @@ class VsphereCloudProviderCharm(CharmBase):
         if not self.stored.config_hash:
             return
         self.unit.status = MaintenanceStatus("Deploying vSphere Cloud Provider")
-        self.backend.apply()
+        self.backend.apply_statics()
         self.stored.deployed = True
         self.unit.status = ActiveStatus()
         self._set_version()

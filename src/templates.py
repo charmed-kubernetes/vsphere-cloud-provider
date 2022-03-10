@@ -72,9 +72,14 @@ class TemplateEngine:
         return self._load("cpi-config-map.yaml.j2")
 
     @property
-    def provider(self) -> Resource:
-        """Yields yaml for configuring the ServiceAccount, DaemonSet, and Service."""
-        return self._load("cpi-provider.yaml.j2")
+    def daemonset(self) -> Resource:
+        """Yields yaml for configuring the DaemonSet."""
+        return self._load("cpi-daemonset.yaml.j2")
+
+    @property
+    def service(self) -> Resource:
+        """Yields yaml for configuring the ServiceAccount and Service."""
+        return self._load("cpi-service.yaml.j2")
 
     @property
     def role_bindings(self) -> Resource:

@@ -1,17 +1,7 @@
-### cpi-provider.yaml
+### cpi-daemonset.yaml
 ###    str juju_app      : name of deployed application
 ###    str node_selector : label which targets control-plane nodes
 ###    str image         : vsphere CCM image
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: cloud-controller-manager
-  labels:
-    vsphere-cpi-infra: service-account
-    component: cloud-controller-manager
-    app.juju.is/created-by: {{ juju_app }}
-  namespace: kube-system
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -74,21 +64,3 @@ spec:
       - name: vsphere-config-volume
         configMap:
           name: cloud-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: vsphere-cloud-controller-manager
-  namespace: kube-system
-  labels:
-    component: cloud-controller-manager
-    app.juju.is/created-by: {{ juju_app }}
-spec:
-  type: NodePort
-  ports:
-    - port: 43001
-      protocol: TCP
-      targetPort: 43001
-  selector:
-    component: cloud-controller-manager
----
