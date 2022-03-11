@@ -85,7 +85,7 @@ spec:
       volumes:
       - name: vsphere-config-volume
         configMap:
-          name: cloud-config
+          name: vsphere-cloud-config
 ### cpi-service.yaml
 ###    str juju_app      : name of deployed application
 ---
