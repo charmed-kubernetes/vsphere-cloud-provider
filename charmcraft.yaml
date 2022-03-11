@@ -13,3 +13,4 @@ parts:
     charm-python-packages: [setuptools]  # required to use jinja2
     prime:
       - templates/**
+      - schemas/**
