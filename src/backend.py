@@ -49,6 +49,7 @@ class CharmBackend(Object):
     def apply_statics(self):
         """Apply templates which don't depend on relation or config."""
         templates = self._templates(defaultdict(str))
+        log.info("Applying static objects from templates: %s", templates)
         self.lk_helpers.apply_resources(
             templates.role_bindings.lightkube
             + templates.roles.lightkube
@@ -57,11 +58,13 @@ class CharmBackend(Object):
 
     def restart(self):
         """Restart the VCCM DaemonSet."""
-        daemonsets = self.lk_helpers.client.list(
-            DaemonSet,
-            namespace="kube-system",
-            labels={"app.juju.is/created-by": f"{self.app.name}"},
-            fields={"metadata.name": "vsphere-cloud-controller-manager"},
+        daemonsets = list(
+            self.lk_helpers.client.list(
+                DaemonSet,
+                namespace="kube-system",
+                labels={"app.juju.is/created-by": f"{self.app.name}"},
+                fields={"metadata.name": "vsphere-cloud-controller-manager"},
+            )
         )
         if not daemonsets:
             log.error("CCM pod not found to restart")
@@ -75,10 +78,14 @@ class CharmBackend(Object):
     def remove(self):
         """Remove all the static components."""
         templates = self._templates(defaultdict(str))
+        log.info("Removing static objects from templates: %s", templates)
         self.lk_helpers.delete_resources(
             templates.role_bindings.lightkube
             + templates.roles.lightkube
-            + templates.service.lightkube,
+            + templates.service.lightkube
+            + templates.secret.lightkube
+            + templates.config_map.lightkube
+            + templates.daemonset.lightkube,
             ignore_unauthorized=True,
         )
 
@@ -86,6 +93,7 @@ class CharmBackend(Object):
         """Create or update the `cloud-config` resources."""
         config = cloud_config.properties
         templates = self._templates(config)
+        log.info("Applying cloud-config from templates: %s", templates)
         self.lk_helpers.apply_resources(
             templates.secret.lightkube
             + templates.config_map.lightkube
@@ -95,6 +103,7 @@ class CharmBackend(Object):
     def delete_cloud_config(self):
         """Remove the `cloud-config` resources, if we created it."""
         templates = self._templates(defaultdict(str))
+        log.info("Removing cloud_config from templates: %s", templates)
         resources = (
             templates.secret.lightkube
             + templates.config_map.lightkube
@@ -119,7 +128,7 @@ class CharmBackend(Object):
 class CharmConfig:
     """Representation of the required charm configuration."""
 
-    _schema = yaml.safe_load(Path("schemas", "config-schema.yaml").read_text())
+    _schema = yaml.safe_load(Path("schemas", "config-schema.yaml").read_text("utf-8"))
 
     def __init__(self, charm):
         """Creates a CharmConfig object from relation and configuration data."""
@@ -148,7 +157,7 @@ class CharmConfig:
                 try:
                     key, value = label.split("=")
                 except ValueError:
-                    log.warning(f"Skipping invalid label {label}")
+                    log.warning("Skipping invalid label %s", label)
                 else:
                     updated[key] = value
 
@@ -182,7 +191,7 @@ class CharmConfig:
         """Validate the given cloud config params and return any error."""
         try:
             jsonschema.validate(self.properties, self._schema)
-        except jsonschema.ValidationError as e:
+        except jsonschema.ValidationError as ex:
             log.exception("Failed to validate cloud config params")
-            return e.message
+            return str(ex)
         return None

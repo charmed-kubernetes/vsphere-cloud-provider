@@ -1,11 +1,10 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 """Generate vsphere yaml necessary for deploying the provider from templates in the charm."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict
 
-import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from lightkube import codecs
 
@@ -18,24 +17,10 @@ class Resource:
 
     yaml: str
 
-    @staticmethod
-    def _fix_generic_list(manifest):
-        # The kubectl CLI will automatically translate "kind: List" into a
-        # concrete list type, but lightkube won't.
-        # See the note at https://kubernetes.io/docs/reference/using-api/api-concepts/#collections
-        resources = yaml.safe_load_all(manifest)
-        for resource in resources:
-            if resource["kind"] == "List":
-                item_kind = resource["items"][0]["kind"]
-                concrete_list = f"{item_kind}List"
-                resource["kind"] = concrete_list
-        return yaml.safe_dump_all(resources)
-
     @property
     def lightkube(self):
         """Resolve the yaml to a list of lightkube objects."""
-        resources = Resource._fix_generic_list(self.yaml)
-        return codecs.load_all_yaml(resources)
+        return codecs.load_all_yaml(self.yaml)
 
 
 @dataclass
@@ -46,7 +31,7 @@ class TemplateEngine:
     control_node_selector: Dict[str, str]
     server: str
     username: str
-    password: str
+    password: str = field(repr=False)
     datacenter: str
     image: str
 

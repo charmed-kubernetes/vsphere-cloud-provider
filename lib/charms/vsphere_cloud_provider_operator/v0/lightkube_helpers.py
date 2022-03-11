@@ -29,7 +29,7 @@ class LightKubeHelpers:
     def apply_resources(self, resources):
         """Create or update a resource."""
         for obj in resources:
-            self.client.apply(obj, namespace=obj.namespace)
+            self.client.apply(obj, namespace=obj.metadata.namespace)
 
     def delete_resources(
         self, resources, namespace=None, ignore_not_found=False, ignore_unauthorized=False
@@ -59,10 +59,10 @@ class LightKubeHelpers:
             log.exception("ApiError encountered while attempting to delete resource.")
             if err.status.message is not None:
                 if "not found" in err.status.message and ignore_not_found:
-                    log.error(f"Ignoring not found error:\n{err.status.message}")
+                    log.error("Ignoring not found error:\n%s", err.status.message)
                 elif "(Unauthorized)" in err.status.message and ignore_unauthorized:
                     # Ignore error from https://bugs.launchpad.net/juju/+bug/1941655
-                    log.error(f"Ignoring unauthorized error:\n{err.status.message}")
+                    log.error("Ignoring unauthorized error:\n%s,", err.status.message)
                 else:
                     log.error(err.status.message)
                     raise

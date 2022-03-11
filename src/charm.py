@@ -92,7 +92,7 @@ class VsphereCloudProviderCharm(CharmBase):
             self.backend.restart()
             self.unit.status = ActiveStatus()
 
-    def _install_or_upgrade(self, event=None):
+    def _install_or_upgrade(self, _event=None):
         if not self.stored.config_hash:
             return
         self.unit.status = MaintenanceStatus("Deploying vSphere Cloud Provider")
@@ -101,12 +101,12 @@ class VsphereCloudProviderCharm(CharmBase):
         self.unit.status = ActiveStatus()
         self._set_version()
 
-    def _set_version(self, event=None):
+    def _set_version(self, _event=None):
         if self.unit.is_leader():
             _, version = self.config.get("image").rsplit(":")
             self.unit.set_workload_version(version)
 
-    def _cleanup(self, event):
+    def _cleanup(self, _event):
         self.unit.status = MaintenanceStatus("Cleaning up vSphere Cloud Provider")
         self.backend.remove()
         self.unit.status = MaintenanceStatus("Shutting down")
