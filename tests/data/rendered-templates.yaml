@@ -43,6 +43,8 @@ spec:
       k8s-app: vsphere-cloud-controller-manager
   updateStrategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
   template:
     metadata:
       labels:

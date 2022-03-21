@@ -11,7 +11,7 @@ from string import hexdigits
 import jsonschema
 import yaml
 from charms.vsphere_cloud_provider_operator.v0.lightkube_helpers import LightKubeHelpers
-from lightkube.models.apps_v1 import DaemonSet
+from lightkube.resources.apps_v1 import DaemonSet
 from ops.charm import RelationBrokenEvent
 from ops.framework import Object
 
@@ -28,7 +28,7 @@ class CharmBackend(Object):
     def __init__(self, charm):
         super().__init__(charm, "backend")
         self.charm = charm
-        self.lk_helpers = LightKubeHelpers(charm)
+        self.lk_helpers = LightKubeHelpers(charm.app.name)
 
     @property
     def app(self):
@@ -73,7 +73,12 @@ class CharmBackend(Object):
         # No "rollout restart" command available, so we patch the DS with
         # an annotation w/ a random value to force a restart.
         ds.metadata.annotations["restart"] = "".join(choices(hexdigits, k=4))
-        self.lk_helpers.client.patch(DaemonSet, "vsphere-cloud-controller-manager", ds)
+        self.lk_helpers.client.patch(
+            DaemonSet,
+            "vsphere-cloud-controller-manager",
+            ds,
+            namespace=ds.metadata.namespace,
+        )
 
     def remove(self):
         """Remove all the static components."""
