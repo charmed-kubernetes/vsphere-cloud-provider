@@ -6,38 +6,37 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: vsphere-cloud-config
   labels:
-    juju-application: test_render_all
+    vsphere-cpi-infra: config
+    component: cloud-controller-manager
+    app.juju.is/created-by: test_render_all
+  namespace: kube-system
 data:
   cpi-vsphere.conf: |
     [Global]
     port = "443"
-    insecure-flag = "true" #Optional. Please tweak based on setup.
-    secret-name = "cpi-global-secret"
+    # set insecureFlag to true if the vCenter uses a self-signed cert
+    insecure-flag = "true"
+    secret-name = "vsphere-cloud-secret"
     secret-namespace = "kube-system"
     [VirtualCenter "1.2.3.4"]
     datacenters = "dc1"
-### cpi-provider.yaml
+### cpi-daemonset.yaml
 ###    str juju_app      : name of deployed application
 ###    str node_selector : label which targets control-plane nodes
 ###    str image         : vsphere CCM image
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: cloud-controller-manager
-  namespace: kube-system
-  labels:
-    juju-application: test_render_all
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: vsphere-cloud-controller-manager
-  namespace: kube-system
   labels:
-    juju-application: test_render_all
+    component: cloud-controller-manager
+    tier: control-plane
+    app.juju.is/created-by: test_render_all
     k8s-app: vsphere-cloud-controller-manager
+  namespace: kube-system
 spec:
   selector:
     matchLabels:
@@ -47,13 +46,14 @@ spec:
   template:
     metadata:
       labels:
+        name: vsphere-cloud-controller-manager
+        component: cloud-controller-manager
+        tier: control-plane
         k8s-app: vsphere-cloud-controller-manager
-        juju-application: test_render_all
+        app.juju.is/created-by: test_render_all
     spec:
       nodeSelector:
         juju-application: kubernetes-control-plane
-      securityContext:
-        runAsUser: 0
       tolerations:
       - key: node.cloudprovider.kubernetes.io/uninitialized
         value: "true"
@@ -64,6 +64,8 @@ spec:
       - key: node-role.kubernetes.io/etcd
         value: "true"
         effect: NoExecute
+      securityContext:
+        runAsUser: 1001
       serviceAccountName: cloud-controller-manager
       containers:
         - name: vsphere-cloud-controller-manager
@@ -83,7 +85,19 @@ spec:
       volumes:
       - name: vsphere-config-volume
         configMap:
-          name: cloud-config
+          name: vsphere-cloud-config
+### cpi-service.yaml
+###    str juju_app      : name of deployed application
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cloud-controller-manager
+  labels:
+    vsphere-cpi-infra: service-account
+    component: cloud-controller-manager
+    app.juju.is/created-by: test_render_all
+  namespace: kube-system
 ---
 apiVersion: v1
 kind: Service
@@ -92,7 +106,7 @@ metadata:
   namespace: kube-system
   labels:
     component: cloud-controller-manager
-    juju-application: test_render_all
+    app.juju.is/created-by: test_render_all
 spec:
   type: NodePort
   ports:
@@ -101,27 +115,25 @@ spec:
       targetPort: 43001
   selector:
     component: cloud-controller-manager
----
 ### cpi-role-bindings.yaml
 ###    Originally sourced from
 ###    https://raw.githubusercontent.com/kubernetes/cloud-provider-vsphere/master/manifests/controller-manager/cloud-controller-manager-role-bindings.yaml
 ###    str juju_app : name of deployed application
 ---
-apiVersion: v1
-kind: List
-items:
-- apiVersion: rbac.authorization.k8s.io/v1
-  kind: RoleBinding
-  metadata:
-    name: servicecatalog.k8s.io:apiserver-authentication-reader
-    namespace: kube-system
-    label:
-      juju-application: test_render_all
-  roleRef:
-    apiGroup: rbac.authorization.k8s.io
-    kind: Role
-    name: extension-apiserver-authentication-reader
-  subjects:
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: servicecatalog.k8s.io:apiserver-authentication-reader
+  labels:
+    vsphere-cpi-infra: role-binding
+    component: cloud-controller-manager
+    app.juju.is/created-by: test_render_all
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
   - apiGroup: ""
     kind: ServiceAccount
     name: cloud-controller-manager
@@ -129,38 +141,39 @@ items:
   - apiGroup: ""
     kind: User
     name: cloud-controller-manager
-- apiVersion: rbac.authorization.k8s.io/v1
-  kind: ClusterRoleBinding
-  metadata:
-    name: system:cloud-controller-manager
-    label:
-      juju-application: test_render_all
-  roleRef:
-    apiGroup: rbac.authorization.k8s.io
-    kind: ClusterRole
-    name: system:cloud-controller-manager
-  subjects:
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:cloud-controller-manager
+  labels:
+    vsphere-cpi-infra: cluster-role-binding
+    component: cloud-controller-manager
+    app.juju.is/created-by: test_render_all
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:cloud-controller-manager
+subjects:
   - kind: ServiceAccount
     name: cloud-controller-manager
     namespace: kube-system
   - kind: User
     name: cloud-controller-manager
-metadata: {}
 ### cpi-roles.yaml
 ###    Originally sourced from
 ###    https://raw.githubusercontent.com/kubernetes/cloud-provider-vsphere/master/manifests/controller-manager/cloud-controller-manager-roles.yaml
 ###    str juju_app : name of deployed application
 ---
-apiVersion: v1
-kind: List
-items:
-- apiVersion: rbac.authorization.k8s.io/v1
-  kind: ClusterRole
-  metadata:
-    name: system:cloud-controller-manager
-    label:
-      juju-application: test_render_all
-  rules:
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:cloud-controller-manager
+  labels:
+    vsphere-cpi-infra: role
+    component: cloud-controller-manager
+    app.juju.is/created-by: test_render_all
+rules:
   - apiGroups:
     - ""
     resources:
@@ -243,7 +256,6 @@ items:
     - watch
     - create
     - update
-metadata: {}
 ### cpi-secret.yaml
 ###    str juju_app : name of deployed application
 ###    str server   : ip address or fqdn of vsphere endpoint
@@ -253,10 +265,12 @@ metadata: {}
 apiVersion: v1
 kind: Secret
 metadata:
-  name: cpi-global-secret
+  name: vsphere-cloud-secret
+  labels:
+    vsphere-cpi-infra: secret
+    component: cloud-controller-manager
+    app.juju.is/created-by: test_render_all
   namespace: kube-system
-  label:
-    juju-application: test_render_all
 stringData:
   1.2.3.4.username: "alice@vsphere.local"
   1.2.3.4.password: "s3cr3t"

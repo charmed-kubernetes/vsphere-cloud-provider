@@ -26,8 +26,9 @@ options:
       image to use by the vsphere cloud controller manager
     default: "gcr.io/cloud-provider-vsphere/cpi/release/manager:latest"
     type: string
-  control_node_selector:
-    description: >-
+
+  control-node-selector:
+    description: |
       Specifies to which nodes this operator adds the vsphere-cpi daemonsets
       Declare node labels in key=value format, separated by spaces.
 

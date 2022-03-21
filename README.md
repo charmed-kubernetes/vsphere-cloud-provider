@@ -10,10 +10,10 @@ The charm requires vSphere credentials and connection information, which
 can be provided either directly, via config, or via the `vsphere-integration`
 relation to the [vSphere Integrator charm](https://charmhub.io/vsphere-integrator).
 
-```
-juju offer cluster-model.vsphere-integrator:clients
-juju consume cluster-model.vsphere-integrator
-juju deploy vsphere-cloud-provider-operator
+```bash
+juju offer ${CLUSTER_MODEL}.vsphere-integrator:clients
+juju consume ${CLUSTER_MODEL}.vsphere-integrator
+juju deploy vsphere-cloud-provider-operator --trust
 juju relate vsphere-cloud-provider-operator vsphere-integrator
 ```
 
@@ -21,10 +21,10 @@ You must also tell the cluster on which it is deployed that it will be
 acting as an external cloud provider. For Charmed Kubernetes, you can
 simply relate it to the control plane.
 
-```
+```bash
 juju offer vsphere-cloud-provider-operator:external-cloud-provider
-juju switch cluster-model
-juju consume k8s-model.vsphere-cloud-provider-operator
+juju switch ${CLUSTER_MODEL}
+juju consume ${K8S_MODEL}.vsphere-cloud-provider-operator
 juju relate kubernetes-control-plane vsphere-cloud-provider-operator
 ```
 

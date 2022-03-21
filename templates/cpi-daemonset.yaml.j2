@@ -1,24 +1,18 @@
-### cpi-provider.yaml
+### cpi-daemonset.yaml
 ###    str juju_app      : name of deployed application
 ###    str node_selector : label which targets control-plane nodes
 ###    str image         : vsphere CCM image
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: cloud-controller-manager
-  namespace: kube-system
-  labels:
-    juju-application: {{ juju_app }}
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: vsphere-cloud-controller-manager
-  namespace: kube-system
   labels:
-    juju-application: {{ juju_app }}
+    component: cloud-controller-manager
+    tier: control-plane
+    app.juju.is/created-by: {{ juju_app }}
     k8s-app: vsphere-cloud-controller-manager
+  namespace: kube-system
 spec:
   selector:
     matchLabels:
@@ -28,15 +22,16 @@ spec:
   template:
     metadata:
       labels:
+        name: vsphere-cloud-controller-manager
+        component: cloud-controller-manager
+        tier: control-plane
         k8s-app: vsphere-cloud-controller-manager
-        juju-application: {{ juju_app }}
+        app.juju.is/created-by: {{ juju_app }}
     spec:
       nodeSelector:
         {%- for key, values in node_selector.items() %}
         {{ key }}: {{ values }}
         {%- endfor %}
-      securityContext:
-        runAsUser: 0
       tolerations:
       - key: node.cloudprovider.kubernetes.io/uninitialized
         value: "true"
@@ -47,6 +42,8 @@ spec:
       - key: node-role.kubernetes.io/etcd
         value: "true"
         effect: NoExecute
+      securityContext:
+        runAsUser: 1001
       serviceAccountName: cloud-controller-manager
       containers:
         - name: vsphere-cloud-controller-manager
@@ -66,22 +63,4 @@ spec:
       volumes:
       - name: vsphere-config-volume
         configMap:
-          name: cloud-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: vsphere-cloud-controller-manager
-  namespace: kube-system
-  labels:
-    component: cloud-controller-manager
-    juju-application: {{ juju_app }}
-spec:
-  type: NodePort
-  ports:
-    - port: 43001
-      protocol: TCP
-      targetPort: 43001
-  selector:
-    component: cloud-controller-manager
----
+          name: vsphere-cloud-config
