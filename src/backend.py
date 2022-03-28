@@ -38,7 +38,7 @@ class CharmBackend(Object):
     def _templates(self, config):
         return TemplateEngine(
             juju_app=self.app.name,
-            control_node_selector=config["control-node-selector"],
+            control_node_selector=config.get("control-node-selector") or {},
             server=config["server"],
             username=config["username"],
             password=config["password"],
