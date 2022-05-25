@@ -1,0 +1,31 @@
+api-endpoints: '["https://10.246.154.7:6443"]'
+cluster-tag: kubernetes-4ypskxahbu3rnfgsds3pksvwe3uh0lxt
+cohort-keys: |-
+  {
+    "cdk-addons": "",
+    "kube-apiserver": "",
+    "kube-controller-manager": "",
+    "kube-proxy": "",
+    "kube-scheduler": "",
+    "kubectl": "",
+    "kubelet": ""
+  }
+creds: |-
+  {
+    "system:node:juju-e10367-1": {
+      "client_token": "admin::reacted",
+      "kubelet_token": "kubernetes-worker/0::reacted",
+      "proxy_token": "kube-proxy::reacted", 
+      "scope": "kubernetes-worker/0"
+    }
+  }
+default-cni: '""'
+domain: cluster.local
+egress-subnets: 10.246.154.7/32
+enable-kube-dns: "True"
+has-xcp: "false"
+ingress-address: 10.246.154.7
+port: "53"
+private-address: 10.246.154.7
+registry-location: rocks.canonical.com:443/cdk
+sdn-ip: 10.152.183.20

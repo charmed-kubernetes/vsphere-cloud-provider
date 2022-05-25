@@ -4,9 +4,11 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 import json
-from unittest.mock import Mock
+import unittest.mock as mock
+from pathlib import Path
 
 import pytest
+import yaml
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.testing import Harness
 
@@ -22,13 +24,10 @@ def harness():
         harness.cleanup()
 
 
-@pytest.fixture
-def lk_client(monkeypatch):
-    monkeypatch.setattr(
-        "charms.vsphere_cloud_provider_operator.v0.lightkube_helpers.Client",
-        client := Mock(name="lightkube.Client"),
-    )
-    return client
+@pytest.fixture(autouse=True)
+def lk_client():
+    with mock.patch("lightkube.Client") as mock_lightkube:
+        yield mock_lightkube
 
 
 def test_ccm(harness, lk_client):
@@ -36,17 +35,29 @@ def test_ccm(harness, lk_client):
     harness.begin_with_initial_hooks()
     assert isinstance(harness.charm.unit.status, BlockedStatus)
 
-    # Remove caching from properties (happens automatically for the
-    # cloud-config relation provider).
-    rel_cls = type(harness.charm.integrator)
-    del harness.charm.integrator.relation
+    # Add the kube-control relation
+    rel_cls = type(harness.charm.kube_control)
     rel_cls.relation = property(rel_cls.relation.func)
-    del harness.charm.integrator._data
     rel_cls._data = property(rel_cls._data.func)
+    rel_id = harness.add_relation("kube-control", "kubernetes-control-plane")
+    assert isinstance(harness.charm.unit.status, WaitingStatus)
+    harness.add_relation_unit(rel_id, "kubernetes-control-plane/0")
+    assert isinstance(harness.charm.unit.status, WaitingStatus)
+    harness.update_relation_data(
+        rel_id,
+        "kubernetes-control-plane/0",
+        yaml.safe_load(Path("tests/data/kube_control_data.yaml").read_text()),
+    )
+    assert isinstance(harness.charm.unit.status, BlockedStatus)
 
+    # Add the external-cloud-provider relation
     harness.add_relation("external-cloud-provider", "kubernetes-control-plane")
     assert isinstance(harness.charm.unit.status, BlockedStatus)
 
+    # Add the vsphere-integration relation
+    rel_cls = type(harness.charm.integrator)
+    rel_cls.relation = property(rel_cls.relation.func)
+    rel_cls._data = property(rel_cls._data.func)
     rel_id = harness.add_relation("vsphere-integration", "integrator")
     assert isinstance(harness.charm.unit.status, WaitingStatus)
     harness.add_relation_unit(rel_id, "integrator/0")
@@ -67,7 +78,7 @@ def test_ccm(harness, lk_client):
     harness.remove_relation(rel_id)
     assert isinstance(harness.charm.unit.status, BlockedStatus)
 
-    lk_client().list.return_value = [Mock(**{"metadata.annotations": {}})]
+    lk_client().list.return_value = [mock.Mock(**{"metadata.annotations": {}})]
     harness.update_config(
         {
             "server": "vsphere.local",

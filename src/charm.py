@@ -22,7 +22,9 @@ from ops.model import (
     WaitingStatus,
 )
 
-from backend import CharmBackend, CharmConfig
+from backend import CharmBackend
+from config import CharmConfig
+from kube_control_requires import KubeControlRequires
 
 log = logging.getLogger(__name__)
 
@@ -38,22 +40,26 @@ class VsphereCloudProviderCharm(CharmBase):
 
         self.backend = CharmBackend(self)
         self.integrator = VsphereIntegrationRequires(self)
+        self.kube_control = KubeControlRequires(self)
 
-        self.framework.observe(self.on.config_changed, self._check_config)
+        self.framework.observe(self.on.kube_control_relation_created, self._check_config)
+        self.framework.observe(self.on.kube_control_relation_joined, self._kube_control)
+        self.framework.observe(self.on.kube_control_relation_changed, self._check_config)
+        self.framework.observe(self.on.kube_control_relation_broken, self._check_config)
+
+        self.framework.observe(
+            self.on.external_cloud_provider_relation_created, self._check_config
+        )
+        self.framework.observe(self.on.external_cloud_provider_relation_broken, self._check_config)
+
         self.framework.observe(self.on.vsphere_integration_relation_created, self._check_config)
         self.framework.observe(self.on.vsphere_integration_relation_joined, self._check_config)
         self.framework.observe(self.on.vsphere_integration_relation_changed, self._check_config)
         self.framework.observe(self.on.vsphere_integration_relation_broken, self._check_config)
-        self.framework.observe(
-            self.on.external_cloud_provider_relation_created, self._check_config
-        )
-        self.framework.observe(self.on.external_cloud_provider_relation_joined, self._check_config)
-        self.framework.observe(
-            self.on.external_cloud_provider_relation_changed, self._check_config
-        )
-        self.framework.observe(self.on.external_cloud_provider_relation_broken, self._check_config)
+
         self.framework.observe(self.on.install, self._install_or_upgrade)
         self.framework.observe(self.on.upgrade_charm, self._install_or_upgrade)
+        self.framework.observe(self.on.config_changed, self._check_config)
         self.framework.observe(self.on.leader_elected, self._set_version)
         self.framework.observe(self.on.stop, self._cleanup)
 
@@ -62,8 +68,23 @@ class VsphereCloudProviderCharm(CharmBase):
         """Find a control-plane-node external-cloud-provider relation."""
         return self.model.get_relation("external-cloud-provider")
 
+    def _kube_control(self, event=None):
+        self.kube_control.set_auth_request(self.app.name)
+        return self._check_config(event)
+
     def _check_config(self, event=None):
-        self.unit.status = MaintenanceStatus("Updating cloud-config")
+        self.unit.status = MaintenanceStatus("Evaluating kubernetes authentication.")
+        evaluation = self.kube_control.evaluate_relation(event)
+        if evaluation:
+            if "Waiting" in evaluation:
+                self.unit.status = WaitingStatus(evaluation)
+            else:
+                self.unit.status = BlockedStatus(evaluation)
+            return
+        self.kube_control.create_kubeconfig("/root/.kube/config", "root")
+        self.kube_control.create_kubeconfig("/home/ubuntu/.kube/config", "ubuntu")
+
+        self.unit.status = MaintenanceStatus("Evaluating cloud-config.")
         cloud_config = CharmConfig(self)
         evaluation = cloud_config.evaluate_relation(event)
         if evaluation:

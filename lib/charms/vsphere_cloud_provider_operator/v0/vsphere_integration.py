@@ -25,8 +25,6 @@ LIBPATCH = 1
 log = logging.getLogger(__name__)
 
 
-# Can't use EndpointWrapper from SDI because the integrator can't do
-# the version negotiation. :(
 class VsphereIntegrationRequires(Object):
     """Requires side of vsphere-integration relation."""
 

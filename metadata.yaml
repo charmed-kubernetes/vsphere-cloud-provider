@@ -1,12 +1,12 @@
 # Copyright 2022 Canonical, Ltd.
 # See LICENSE file for licensing details.
 name: vsphere-cloud-provider-operator
-display-name: vSphere Cloud Provider Operator
+display-name: vSphere Cloud Provider
 summary: Runs the vSphere Cloud Provider in the cluster.
 description: >-
   The vSphere cloud provider provides the Kubernetes cluster access to
   native resources from vSphere, such as storage and load balancers.
-
+subordinate: true
 provides:
   external-cloud-provider:
     interface: external_cloud_provider
@@ -14,14 +14,8 @@ provides:
 requires:
   vsphere-integration:
     interface: vsphere-integration
+    scope: container
     limit: 1
-
-containers:
-  operator-base:
-    resource: operator-base
-
-resources:
-  operator-base:
-    type: oci-image
-    description: Base image for the operator to run with (ubuntu:focal)
-    upstream-source: ubuntu:focal
+  kube-control:
+    interface: kube-control
+    limit: 1
