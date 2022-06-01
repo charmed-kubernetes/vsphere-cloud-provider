@@ -134,7 +134,8 @@ class VsphereCloudProviderCharm(CharmBase):
                 self.unit.status = BlockedStatus(evaluation)
             return
 
-        if err := cloud_config.validate_cloud_config:
+        err = cloud_config.validate_cloud_config
+        if err:
             self.unit.status = BlockedStatus(f"Invalid config: {err}")
             return
         new_hash = md5(

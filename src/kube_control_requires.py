@@ -143,7 +143,7 @@ class KubeControlRequires(Object):
         token = creds["client_token"]
         ca_b64 = base64.b64encode(Path(ca).read_bytes()).decode("utf-8")
 
-        # Create the config file with the address of the master server.
+        # Create the config file with the address of the control-plane server.
         config_contents = {
             "apiVersion": "v1",
             "kind": "Config",
@@ -238,13 +238,13 @@ class KubeControlRequires(Object):
         @params groups - Determines the level of eleveted privileges of the
                          requested user.
                          Can be overridden to request sudo level access on the
-                         cluster via changing to system:masters.
+                         cluster via changing to system:masters.  #wokeignore:rule=master
         """
         if self.relation:
             self.relation.data[self.charm.unit].update(dict(kubelet_user=user, auth_group=group))
 
     def set_gpu(self, enabled=True):
-        """Tell the master that we're gpu-enabled (or not)."""
+        """Tell the control-plane that we're gpu-enabled (or not)."""
         log("Setting gpu={} on kube-control relation".format(enabled))
         for relation in self.relation:
             relation.data.update({"gpu": enabled})
@@ -264,7 +264,7 @@ class KubeControlRequires(Object):
         return None
 
     def get_dns(self):
-        """Return DNS info provided by the master."""
+        """Return DNS info provided by the control-plane."""
         return {
             "port": self.port,
             "domain": self.domain,
@@ -273,7 +273,7 @@ class KubeControlRequires(Object):
         }
 
     def dns_ready(self):
-        """Return True if we have all DNS info from the master."""
+        """Return True if we have all DNS info from the control-plane."""
         keys = ["port", "domain", "sdn-ip", "enable-kube-dns"]
         dns_info = self.get_dns()
         return set(dns_info.keys()) == set(keys) and dns_info["enable-kube-dns"] is not None
