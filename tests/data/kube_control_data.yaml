@@ -12,9 +12,9 @@ cohort-keys: |-
   }
 creds: |-
   {
-    "system:node:juju-e10367-1": {
+    "vsphere-cloud-provider/0": {
       "client_token": "admin::reacted",
-      "kubelet_token": "kubernetes-worker/0::reacted",
+      "kubelet_token": "vsphere-cloud-provider/0::reacted",
       "proxy_token": "kube-proxy::reacted", 
       "scope": "kubernetes-worker/0"
     }

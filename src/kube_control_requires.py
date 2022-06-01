@@ -5,12 +5,13 @@
 This only implements the requires side, currently, since the integrator
 is still using the Reactive Charm framework self.
 """
+import base64
 import json
 import logging
 from functools import cached_property
 from os import PathLike
 from pathlib import Path
-from typing import List, Optional
+from typing import Mapping, Optional
 
 import jsonschema
 import yaml
@@ -45,6 +46,7 @@ class KubeControlRequires(Object):
                         proxy_token=dict(type="string"),
                         scope=dict(type="string"),
                     ),
+                    required=["client_token", "kubelet_token", "proxy_token", "scope"],
                 ),
             ),
             "default-cni": dict(type="string", json=True),
@@ -113,15 +115,8 @@ class KubeControlRequires(Object):
         )
         if not self.is_ready:
             if no_relation:
-                return "Missing required kube-control"
-            return "Waiting for kube-control"
-
-    def create_kubeconfig(self, path: PathLike, user: str):
-        """Write kubeconfig based on available creds."""
-        # TODO: DRAGONS BE HERE
-        kube_config = {}
-        file_path = Path(path)
-        file_path.write_text(yaml.safe_dump(kube_config))
+                return f"Missing required {self.endpoint} relation"
+            return f"Waiting for {self.endpoint} relation"
 
     @property
     def is_ready(self):
@@ -129,7 +124,7 @@ class KubeControlRequires(Object):
         try:
             jsonschema.validate(self._data, self.SCHEMA)
         except jsonschema.ValidationError:
-            log.error(f"kube-control relation data not yet valid.")
+            log.error(f"{self.endpoint} relation data not yet valid.")
             return False
         return True
 
@@ -137,6 +132,47 @@ class KubeControlRequires(Object):
         if not self._data:
             return None
         return self._data.get(key)
+
+    def create_kubeconfig(self, ca: PathLike, kubeconfig: PathLike, user: str, k8s_user: str):
+        """Write kubeconfig based on available creds."""
+        creds = self.get_auth_credentials(k8s_user)
+
+        cluster = "juju-cluster"
+        context = "juju-context"
+        server = self.api_endpoints[0]
+        token = creds["client_token"]
+        ca_b64 = base64.b64encode(Path(ca).read_bytes()).decode("utf-8")
+
+        # Create the config file with the address of the master server.
+        config_contents = {
+            "apiVersion": "v1",
+            "kind": "Config",
+            "preferences": {},
+            "clusters": [
+                {
+                    "cluster": {
+                        "certificate-authority-data": ca_b64,
+                        "server": server,
+                    },
+                    "name": cluster,
+                }
+            ],
+            "contexts": [{"context": {"cluster": cluster, "user": user}, "name": context}],
+            "users": [{"name": user, "user": {"token": token}}],
+            "current-context": context,
+        }
+        old_kubeconfig = Path(kubeconfig)
+        new_kubeconfig = Path(f"{kubeconfig}.new")
+        new_kubeconfig.parent.mkdir(exist_ok=True, mode=0o750)
+        new_kubeconfig.write_text(yaml.safe_dump(config_contents))
+        new_kubeconfig.chmod(mode=0o600)
+
+        if old_kubeconfig.exists():
+            changed = new_kubeconfig.read_text() != old_kubeconfig.read_text()
+        else:
+            changed = True
+        if changed:
+            new_kubeconfig.rename(old_kubeconfig)
 
     @property
     def api_endpoints(self):
@@ -215,7 +251,7 @@ class KubeControlRequires(Object):
         for relation in self.relation:
             relation.data.update({"gpu": enabled})
 
-    def get_auth_credentials(self, user):
+    def get_auth_credentials(self, user) -> Optional[Mapping[str, str]]:
         """
         Return the authentication credentials.
         """
@@ -225,9 +261,9 @@ class KubeControlRequires(Object):
         if user in self.creds:
             return {
                 "user": user,
-                "kubelet_token": self.creds["kubelet_token"],
-                "proxy_token": self.creds["proxy_token"],
-                "client_token": self.creds["client_token"],
+                "kubelet_token": self.creds[user]["kubelet_token"],
+                "proxy_token": self.creds[user]["proxy_token"],
+                "client_token": self.creds[user]["client_token"],
             }
         return None
 

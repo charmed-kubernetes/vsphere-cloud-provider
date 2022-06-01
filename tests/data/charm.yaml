@@ -1,0 +1,21 @@
+description: Overlay for attaching current charm
+applications:
+  kubernetes-control-plane:
+    options:
+      register-with-taints: ""
+  vsphere-integrator:
+    charm: vsphere-integrator
+    channel: edge
+    num_units: 1
+    trust: true
+  vsphere-cloud-provider:
+    charm: {{charm}}
+relations:
+- - vsphere-cloud-provider:certificates
+  - easyrsa:client
+- - vsphere-cloud-provider:kube-control
+  - kubernetes-control-plane:kube-control
+- - vsphere-cloud-provider:external-cloud-provider
+  - kubernetes-control-plane:external-cloud-provider
+- - vsphere-cloud-provider:vsphere-integration
+  - vsphere-integrator:clients

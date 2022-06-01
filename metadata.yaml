@@ -1,6 +1,6 @@
 # Copyright 2022 Canonical, Ltd.
 # See LICENSE file for licensing details.
-name: vsphere-cloud-provider-operator
+name: vsphere-cloud-provider
 display-name: vSphere Cloud Provider
 summary: Runs the vSphere Cloud Provider in the cluster.
 description: >-
@@ -19,3 +19,5 @@ requires:
   kube-control:
     interface: kube-control
     limit: 1
+  certificates:
+    interface: tls-certificates
