@@ -9,7 +9,6 @@ from hashlib import md5
 from pathlib import Path
 from typing import Optional
 
-
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
@@ -22,10 +21,10 @@ from ops.model import (
 )
 
 from backend import CharmBackend
-from vsphere_integration import VsphereIntegrationRequires
 from certificates_requires import CertificatesRequires
 from config import CharmConfig
 from kube_control_requires import KubeControlRequires
+from vsphere_integration import VsphereIntegrationRequires
 
 log = logging.getLogger(__name__)
 

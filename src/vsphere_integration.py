@@ -7,10 +7,9 @@ is still using the Reactive Charm framework self.
 """
 import json
 import logging
+
 from backports.cached_property import cached_property
-
 from ops.framework import Object
-
 
 log = logging.getLogger(__name__)
 

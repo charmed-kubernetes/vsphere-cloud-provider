@@ -4,15 +4,15 @@
 
 import logging
 from collections import defaultdict
-from backports.cached_property import cached_property
 from pathlib import Path
 from random import choices
 from string import hexdigits
 
-from lightkube_helpers import LightKubeHelpers
+from backports.cached_property import cached_property
 from lightkube.resources.apps_v1 import DaemonSet
 from ops.framework import Object
 
+from lightkube_helpers import LightKubeHelpers
 from templates import TemplateEngine
 
 log = logging.getLogger(__name__)
