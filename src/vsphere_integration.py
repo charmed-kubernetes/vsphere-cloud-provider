@@ -7,19 +7,9 @@ is still using the Reactive Charm framework self.
 """
 import json
 import logging
-from functools import cached_property
+from backports.cached_property import cached_property
 
 from ops.framework import Object
-
-# The unique Charmhub library identifier, never change it
-LIBID = "2080dda979a14f70a672d7eff07d825b"
-
-# Increment this major API version when introducing breaking changes
-LIBAPI = 0
-
-# Increment this PATCH version before using `charmcraft publish-lib` or reset
-# to 0 if you are raising the major API version
-LIBPATCH = 1
 
 
 log = logging.getLogger(__name__)

@@ -8,7 +8,7 @@ is still using the Reactive Charm framework self.
 import base64
 import json
 import logging
-from functools import cached_property
+from backports.cached_property import cached_property
 from os import PathLike
 from pathlib import Path
 from typing import Mapping, Optional

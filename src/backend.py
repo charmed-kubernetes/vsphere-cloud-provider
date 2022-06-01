@@ -4,12 +4,12 @@
 
 import logging
 from collections import defaultdict
-from functools import cached_property
+from backports.cached_property import cached_property
 from pathlib import Path
 from random import choices
 from string import hexdigits
 
-from charms.vsphere_cloud_provider_operator.v0.lightkube_helpers import LightKubeHelpers
+from lightkube_helpers import LightKubeHelpers
 from lightkube.resources.apps_v1 import DaemonSet
 from ops.framework import Object
 

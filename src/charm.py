@@ -9,9 +9,7 @@ from hashlib import md5
 from pathlib import Path
 from typing import Optional
 
-from charms.vsphere_cloud_provider_operator.v0.vsphere_integration import (
-    VsphereIntegrationRequires,
-)
+
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
@@ -24,6 +22,7 @@ from ops.model import (
 )
 
 from backend import CharmBackend
+from vsphere_integration import VsphereIntegrationRequires
 from certificates_requires import CertificatesRequires
 from config import CharmConfig
 from kube_control_requires import KubeControlRequires
