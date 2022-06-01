@@ -1,3 +1,5 @@
+# Copyright 2022 Canonical Ltd.
+# See LICENSE file for licensing details.
 import unittest.mock as mock
 from pathlib import Path
 
@@ -90,12 +92,12 @@ def test_create_kubeconfig(harness, relation_data, mock_ca_cert, tmpdir):
             mock_ca_cert, kube_config, "ubuntu", harness.charm.unit.name
         )
         config = yaml.safe_load(kube_config.read_text())
-        assert config['kind'] == "Config"
-        
+        assert config["kind"] == "Config"
+
         # Second call alters existing file
         kube_config.write_text("")
         harness.charm.kube_control.create_kubeconfig(
             mock_ca_cert, kube_config, "ubuntu", harness.charm.unit.name
         )
         config = yaml.safe_load(kube_config.read_text())
-        assert config['kind'] == "Config"
+        assert config["kind"] == "Config"

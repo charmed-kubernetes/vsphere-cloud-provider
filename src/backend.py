@@ -4,14 +4,12 @@
 
 import logging
 from collections import defaultdict
-from os import environ
+from functools import cached_property
 from pathlib import Path
 from random import choices
 from string import hexdigits
-from typing import Optional
 
 from charms.vsphere_cloud_provider_operator.v0.lightkube_helpers import LightKubeHelpers
-from lightkube.core.exceptions import ConfigError
 from lightkube.resources.apps_v1 import DaemonSet
 from ops.framework import Object
 
@@ -29,12 +27,10 @@ class CharmBackend(Object):
         super().__init__(charm, "backend")
         self.charm = charm
 
-    @property
-    def lk_helpers(self) -> Optional[LightKubeHelpers]:
-        try:
-            return LightKubeHelpers(self.charm.app.name)
-        except ConfigError:
-            return None
+    @cached_property
+    def lk_helpers(self) -> LightKubeHelpers:
+        """Lazy evaluation to build LightKubeHelpers when first necessary."""
+        return LightKubeHelpers(self.charm.app.name)
 
     @property
     def app(self):

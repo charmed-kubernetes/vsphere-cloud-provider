@@ -35,7 +35,7 @@ kubectl describe nodes |egrep "Taints:|Name:|Provider"
 
 * Requires a `charmed-kubernetes` deployment on a vsphere cloud launched by juju
 * Deploy the `vsphere-integrator` charm into the model using `--trust` so juju provided vsphere credentials
-* Deploy the `vsphere-cloud-provider` charm in the model relating to the integrator and to charmed-kubernetes compnents
+* Deploy the `vsphere-cloud-provider` charm in the model relating to the integrator and to charmed-kubernetes components
 * Once the model is active/idle, the cloud-provider charm will have successfully deployed the vsphere controller in the kube-system
   namespace
 * Taint the existing nodes so the controller will apply the correct provider id to those nodes. 

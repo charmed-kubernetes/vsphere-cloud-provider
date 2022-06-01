@@ -8,9 +8,8 @@ is still using the Reactive Charm framework self.
 import dataclasses
 import json
 import logging
-import uuid
 from functools import cached_property
-from typing import Optional
+from typing import List, Mapping, Optional
 
 import jsonschema
 from ops.charm import RelationBrokenEvent
@@ -21,6 +20,8 @@ log = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class Certificate:
+    """Represent a Certificate."""
+
     cert_type: str
     common_name: str
     cert: str
@@ -132,10 +133,8 @@ class CertificatesRequires(Object):
         return self._value("ca")
 
     @property
-    def client_certs(self):
-        """
-        List of [Certificate][] instances for all available client certs.
-        """
+    def client_certs(self) -> List[Certificate]:
+        """Certificate instances for all available client certs."""
         field = "{}.processed_client_requests".format(self._unit_name)
         certs_data = self._value(field) or {}
         return [
@@ -144,14 +143,13 @@ class CertificatesRequires(Object):
         ]
 
     @property
-    def client_certs_map(self):
-        """
-        Mapping of client [Certificate][] instances by their `common_name`.
-        """
+    def client_certs_map(self) -> Mapping[str, Certificate]:
+        """Certificate instances by their `common_name`."""
         return {cert.common_name: cert for cert in self.client_certs}
 
     def request_client_cert(self, cn, sans):
-        """
+        """Request Client certificate for charm.
+
         Request a client certificate and key be generated for the given
         common name (`cn`) and list of alternative names (`sans`).
         This can be called multiple times to request more than one client

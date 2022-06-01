@@ -1,13 +1,13 @@
+# Copyright 2022 Canonical Ltd.
+# See LICENSE file for licensing details.
 import logging
 import random
 import string
 from pathlib import Path
 
 import pytest
-from lightkube import Client, KubeConfig, codecs
-from lightkube.models.autoscaling_v1 import ScaleSpec
+from lightkube import Client, KubeConfig
 from lightkube.models.meta_v1 import ObjectMeta
-from lightkube.resources.apps_v1 import Deployment
 from lightkube.resources.core_v1 import Namespace
 
 log = logging.getLogger(__name__)

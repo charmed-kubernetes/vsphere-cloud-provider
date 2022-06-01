@@ -26,21 +26,22 @@ def harness():
 
 @pytest.fixture(autouse=True)
 def lk_client():
-    with mock.patch("lightkube.Client") as mock_lightkube:
+    with mock.patch("backend.LightKubeHelpers") as mock_lightkube:
         yield mock_lightkube
 
 
 @pytest.fixture(autouse=True)
-def mock_path():
-    with mock.patch("pathlib.Path.mkdir"):
-        with mock.patch("pathlib.Path.write_text"):
-            yield
+def mock_ca_cert(tmpdir):
+    ca_cert = Path(tmpdir) / "ca.crt"
+    with mock.patch.object(VsphereCloudProviderCharm, "CA_CERT_PATH", ca_cert):
+        yield ca_cert
 
 
 @pytest.fixture()
 def certificates():
     with mock.patch("charm.CertificatesRequires") as mocked:
         certificates = mocked.return_value
+        certificates.ca = "abcd"
         certificates.evaluate_relation.return_value = None
         yield certificates
 

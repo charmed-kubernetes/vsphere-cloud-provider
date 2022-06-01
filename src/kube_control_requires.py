@@ -229,32 +229,28 @@ class KubeControlRequires(Object):
         """The sdn_ip value."""
         return self._value("sdn-ip")
 
-    def set_auth_request(self, kubelet, group="system:nodes"):
-        """
-        Tell the master that we are requesting auth, and to use this
-        hostname for the kubelet system account.
+    def set_auth_request(self, user, group="system:nodes"):
+        """Notify contol-plane that we are requesting auth.
 
-        Param groups - Determines the level of eleveted privleges of the
-        requested user. Can be overridden to request sudo level access on the
-        cluster via changing to system:masters.
+        Also, use this hostname for the kubelet system account.
+
+        @params user   - user requesting authentication
+        @params groups - Determines the level of eleveted privileges of the
+                         requested user.
+                         Can be overridden to request sudo level access on the
+                         cluster via changing to system:masters.
         """
         if self.relation:
-            self.relation.data[self.charm.unit].update(
-                dict(kubelet_user=kubelet, auth_group=group)
-            )
+            self.relation.data[self.charm.unit].update(dict(kubelet_user=user, auth_group=group))
 
     def set_gpu(self, enabled=True):
-        """
-        Tell the master that we're gpu-enabled (or not).
-        """
+        """Tell the master that we're gpu-enabled (or not)."""
         log("Setting gpu={} on kube-control relation".format(enabled))
         for relation in self.relation:
             relation.data.update({"gpu": enabled})
 
     def get_auth_credentials(self, user) -> Optional[Mapping[str, str]]:
-        """
-        Return the authentication credentials.
-        """
+        """Return the authentication credentials."""
         if not self._data:
             return None
 
@@ -268,10 +264,7 @@ class KubeControlRequires(Object):
         return None
 
     def get_dns(self):
-        """
-        Return DNS info provided by the master.
-        """
-
+        """Return DNS info provided by the master."""
         return {
             "port": self.port,
             "domain": self.domain,
@@ -280,9 +273,7 @@ class KubeControlRequires(Object):
         }
 
     def dns_ready(self):
-        """
-        Return True if we have all DNS info from the master.
-        """
+        """Return True if we have all DNS info from the master."""
         keys = ["port", "domain", "sdn-ip", "enable-kube-dns"]
         dns_info = self.get_dns()
         return set(dns_info.keys()) == set(keys) and dns_info["enable-kube-dns"] is not None
