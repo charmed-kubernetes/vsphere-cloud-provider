@@ -5,12 +5,12 @@
 import abc
 import logging
 from collections import defaultdict, namedtuple
-from functools import cached_property
 from itertools import islice
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Set, Union
 
 import yaml
+from backports.cached_property import cached_property
 from lightkube import Client, codecs
 from lightkube.core.client import GlobalResource, NamespacedResource
 from lightkube.core.exceptions import ApiError
@@ -56,7 +56,11 @@ class Manifests(abc.ABC):
         self.namespace = default_namespace
         self.charm_name = charm_name
         self.manipulations = manipulations or []
-        self.client = Client(namespace=self.namespace, field_manager=charm_name)
+
+    @cached_property
+    def client(self) -> Client:
+        """Lazy evaluation of the lightkube client."""
+        return Client(namespace=self.namespace, field_manager=self.charm_name)
 
     @abc.abstractproperty
     def config(self) -> Dict:
