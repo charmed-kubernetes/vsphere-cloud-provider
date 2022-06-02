@@ -18,8 +18,10 @@ from typing import Generator, List, Optional, Set, Tuple, TypedDict
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+# wokeignore:rule=master
 BRANCH = "https://api.github.com/repos/kubernetes/cloud-provider-vsphere/branches/master"
 COMMIT = "https://api.github.com/repos/kubernetes/cloud-provider-vsphere/commits/{sha}"
+# wokeignore:rule=master
 RAW = "https://raw.githubusercontent.com/kubernetes/cloud-provider-vsphere/master/releases/{rel}/vsphere-cloud-controller-manager.yaml"
 FILEDIR = Path(__file__).parent
 VERSION_RE = re.compile(r"^v\d+\.\d+")

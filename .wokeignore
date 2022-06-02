@@ -1,1 +1,1 @@
-upstream/manifests/*.yaml
+upstream/manifests/**/*.yaml
