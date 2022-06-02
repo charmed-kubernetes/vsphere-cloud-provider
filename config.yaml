@@ -21,12 +21,6 @@ options:
       Required if not related to the vSphere Integrator. vSphere datacenter
     type: string
 
-  image:
-    description: >-
-      image to use by the vsphere cloud controller manager
-    default: "gcr.io/cloud-provider-vsphere/cpi/release/manager:latest"
-    type: string
-
   control-node-selector:
     description: |
       Specifies to which nodes this operator adds the vsphere-cpi daemonsets
@@ -37,3 +31,36 @@ options:
       e.g. 
         node-role.kubernetes.io/control-plane=""
     type: string
+
+  image-registry:
+    type: string
+    description: |
+      Source registry of metrics server images.
+
+      By setting to a value, each image listed in the component.yaml
+      has its image-registry replaced. 
+
+      If unset, the component.yaml will use its default image registry.
+
+      example)
+        juju config kubernetes-metrics-server image-registry='rocks.canonical.com:443/cdk'
+
+        juju config kubernetes-metrics-server --reset image-registry
+
+  release:
+    type: string
+    description: |
+      Specify the version of cloud-provider as defined by
+      https://github.com/kubernetes/cloud-provider-vsphere/tree/master/releases
+
+      example)
+        juju config vsphere-cloud-provider release='v1.22'
+      
+      A list of supported versions is available through the action:
+        juju run-action vsphere-cloud-provider/0 list-releases --wait
+      
+      To reset by to the latest supported by the charm use:
+        juju config vsphere-cloud-provider --reset release
+      
+      The current release deployed is available by viewing
+        juju status vsphere-cloud-provider

@@ -41,7 +41,7 @@ def test_is_ready_no_relation(harness: Harness, event_type):
     harness.begin()
 
     with mock.patch(
-        "kube_control_requires.KubeControlRequires.relation", new_callable=mock.PropertyMock
+        "requires_kube_control.KubeControlRequires.relation", new_callable=mock.PropertyMock
     ) as mock_prop:
         relation = mock_prop.return_value
         relation.__bool__.return_value = event_type is not None
@@ -56,7 +56,7 @@ def test_is_ready_invalid_data(harness: Harness, relation_data):
     harness.begin()
     relation_data["domain"] = 123
     with mock.patch(
-        "kube_control_requires.KubeControlRequires.relation", new_callable=mock.PropertyMock
+        "requires_kube_control.KubeControlRequires.relation", new_callable=mock.PropertyMock
     ) as mock_prop:
         relation = mock_prop.return_value
         relation.units = ["remote/0"]
@@ -67,7 +67,7 @@ def test_is_ready_invalid_data(harness: Harness, relation_data):
 def test_is_ready_success(harness: Harness, relation_data):
     harness.begin()
     with mock.patch(
-        "kube_control_requires.KubeControlRequires.relation", new_callable=mock.PropertyMock
+        "requires_kube_control.KubeControlRequires.relation", new_callable=mock.PropertyMock
     ) as mock_prop:
         relation = mock_prop.return_value
         relation.units = ["remote/0"]
@@ -78,7 +78,7 @@ def test_is_ready_success(harness: Harness, relation_data):
 def test_create_kubeconfig(harness, relation_data, mock_ca_cert, tmpdir):
     harness.begin()
     with mock.patch(
-        "kube_control_requires.KubeControlRequires.relation", new_callable=mock.PropertyMock
+        "requires_kube_control.KubeControlRequires.relation", new_callable=mock.PropertyMock
     ) as mock_prop:
         relation = mock_prop.return_value
         relation.units = ["remote/0"]
