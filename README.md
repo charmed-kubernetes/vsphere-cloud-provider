@@ -24,10 +24,7 @@ juju relate vsphere-cloud-provider:kube-control            kubernetes-control-pl
 juju relate vsphere-cloud-provider:external-cloud-provider kubernetes-control-plane
 juju relate vsphere-cloud-provider                         vsphere-integrator
 
-##  wait for the vsphere controller daemonset to be running 
-
-kubectl taint nodes -l juju-application=kubernetes-worker node.cloudprovider.kubernetes.io/uninitialized=true:NoSchedule
-kubectl taint nodes -l juju-application=kubernetes-control-plane node.cloudprovider.kubernetes.io/uninitialized=true:NoSchedule
+##  wait for the vsphere controller daemonset to be running
 kubectl describe nodes |egrep "Taints:|Name:|Provider"
 ```
 
