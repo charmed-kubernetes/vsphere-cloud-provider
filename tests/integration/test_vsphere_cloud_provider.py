@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test):
-    charm = next(Path(".").glob("kubernetes-autoscaler*.charm"), None)
+    charm = next(Path(".").glob("vsphere-cloud-provider*.charm"), None)
     if not charm:
         log.info("Build Charm...")
         charm = await ops_test.build_charm(".")

@@ -39,7 +39,7 @@ jobs:
           sudo snap install charmcraft --classic --channel=latest/stable
       - name: Build Charm
         run: |
-          sg lxd -c 'charmcraft pack'
+          sg lxd -c 'charmcraft pack -v'
       - name: Upload charm artifact
         uses: actions/upload-artifact@v3
         with:
