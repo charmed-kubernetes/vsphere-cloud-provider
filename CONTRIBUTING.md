@@ -31,7 +31,7 @@ source .tox/unit/bin/activate
 ### Testing
 
 ```shell
-tox -e fmt           # update your code according to linting rules
+tox -e format        # update your code according to linting rules
 tox -e lint          # code style
 tox -e unit          # unit tests
 tox -e integration   # integration tests
@@ -54,7 +54,9 @@ juju add-model dev
 # Enable DEBUG logging
 juju model-config logging-config="<root>=INFO;unit=DEBUG"
 # Deploy the charm
-juju deploy ./vsphere-cloud-provider_ubuntu-20.04-amd64.charm 
+juju deploy vsphere-integrator
+juju deploy ./vsphere-cloud-provider_ubuntu-20.04-amd64.charm
+juju relate vsphere-integrator vsphere-cloud-provider
 ```
 
 ## Canonical Contributor Agreement

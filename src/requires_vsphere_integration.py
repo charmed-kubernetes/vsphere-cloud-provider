@@ -7,8 +7,11 @@ is still using the Reactive Charm framework self.
 """
 import json
 import logging
+from typing import Optional
 
+import jsonschema
 from backports.cached_property import cached_property
+from ops.charm import RelationBrokenEvent
 from ops.framework import Object
 
 log = logging.getLogger(__name__)
@@ -18,18 +21,19 @@ class VsphereIntegrationRequires(Object):
     """Requires side of vsphere-integration relation."""
 
     LIMIT = 1
-    SCHEMA = {
-        "type": "object",
-        "properties": {
-            "datacenter": {"type": "string"},
-            "datastore": {"type": "string"},
-            "folder": {"type": "string"},
-            "password": {"type": "string"},
-            "respool_path": {"type": "string"},
-            "user": {"type": "string"},
-            "vsphere_ip": {"type": "string"},
+    SCHEMA = dict(
+        type="object",
+        properties={
+            "datacenter": dict(type="string"),
+            "datastore": dict(type="string"),
+            "folder": dict(type="string"),
+            "password": dict(type="string"),
+            "respool_path": dict(type="string"),
+            "user": dict(type="string"),
+            "vsphere_ip": dict(type="string"),
         },
-    }
+        required=["datacenter", "vsphere_ip", "user", "password"],
+    )
     IGNORE_FIELDS = {
         "egress-subnets",
         "ingress-address",
@@ -61,21 +65,25 @@ class VsphereIntegrationRequires(Object):
                 log.error(f"Failed to decode relation data in {field}: {e}")
         return data
 
+    def evaluate_relation(self, event) -> Optional[str]:
+        """Determine if relation is ready."""
+        no_relation = not self.relation or (
+            isinstance(event, RelationBrokenEvent) and event.relation is self.relation
+        )
+        if not self.is_ready:
+            if no_relation:
+                return f"Missing required {self.endpoint} relation"
+            return f"Waiting for {self.endpoint} relation"
+
     @property
     def is_ready(self):
         """Whether the request for this instance has been completed."""
-        return all(
-            field is not None
-            for field in [
-                self.vsphere_ip,
-                self.user,
-                self.password,
-                self.datacenter,
-                self.datastore,
-                self.folder,
-                self.respool_path,
-            ]
-        )
+        try:
+            jsonschema.validate(self._data, self.SCHEMA)
+        except jsonschema.ValidationError:
+            log.error(f"{self.endpoint} relation data not yet valid.")
+            return False
+        return True
 
     def _value(self, key):
         if not self._data:

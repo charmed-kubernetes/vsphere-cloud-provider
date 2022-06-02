@@ -12,15 +12,17 @@ log = logging.getLogger(__name__)
 
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test):
-    log.info("Build Charm...")
-    charm = await ops_test.build_charm(".")
+    charm = next(Path(".").glob("vsphere-cloud-provider*.charm"), None)
+    if not charm:
+        log.info("Build Charm...")
+        charm = await ops_test.build_charm(".")
 
     overlays = [
         ops_test.Bundle("kubernetes-core", channel="edge"),
         Path("tests/data/charm.yaml"),
     ]
 
-    bundle, *overlays = await ops_test.async_render_bundles(*overlays, charm=charm)
+    bundle, *overlays = await ops_test.async_render_bundles(*overlays, charm=charm.resolve())
 
     log.info("Deploy Charm...")
     model = ops_test.model_full_name

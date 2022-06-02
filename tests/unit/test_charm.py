@@ -3,13 +3,12 @@
 #
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
-import json
 import unittest.mock as mock
 from pathlib import Path
 
 import pytest
 import yaml
-from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
+from ops.model import BlockedStatus, MaintenanceStatus, WaitingStatus
 from ops.testing import Harness
 
 from charm import VsphereCloudProviderCharm
@@ -26,7 +25,7 @@ def harness():
 
 @pytest.fixture(autouse=True)
 def lk_client():
-    with mock.patch("backend.LightKubeHelpers") as mock_lightkube:
+    with mock.patch("manifests.Client") as mock_lightkube:
         yield mock_lightkube
 
 
@@ -35,6 +34,28 @@ def mock_ca_cert(tmpdir):
     ca_cert = Path(tmpdir) / "ca.crt"
     with mock.patch.object(VsphereCloudProviderCharm, "CA_CERT_PATH", ca_cert):
         yield ca_cert
+
+
+@pytest.fixture()
+def control_plane():
+    with mock.patch(
+        "charm.VsphereCloudProviderCharm.control_plane_relation", new_callable=mock.PropertyMock
+    ) as mocked:
+        control_plane = mocked.return_value
+        control_plane.app.name = "kubernetes-control-plane"
+        yield control_plane
+
+
+@pytest.fixture()
+def integrator():
+    with mock.patch("charm.VsphereIntegrationRequires") as mocked:
+        vsphereintegrator = mocked.return_value
+        vsphereintegrator.vsphere_ip = "1.2.3.4"
+        vsphereintegrator.user = "alice"
+        vsphereintegrator.password = "bob"
+        vsphereintegrator.datacenter = "Elbonia"
+        vsphereintegrator.evaluate_relation.return_value = None
+        yield vsphereintegrator
 
 
 @pytest.fixture()
@@ -54,8 +75,15 @@ def kube_control():
         yield kube_control
 
 
+def test_waits_for_integrator(harness):
+    harness.begin_with_initial_hooks()
+    charm = harness.charm
+    assert isinstance(charm.unit.status, BlockedStatus)
+    assert charm.unit.status.message == "Missing required vsphere-integration relation"
+
+
+@pytest.mark.usefixtures("integrator")
 def test_waits_for_certificates(harness):
-    harness.set_leader(True)
     harness.begin_with_initial_hooks()
     charm = harness.charm
     assert isinstance(charm.unit.status, BlockedStatus)
@@ -80,10 +108,9 @@ def test_waits_for_certificates(harness):
     assert charm.unit.status.message == "Missing required kube-control relation"
 
 
-@mock.patch("kube_control_requires.KubeControlRequires.create_kubeconfig")
-@pytest.mark.usefixtures("certificates")
+@mock.patch("requires_kube_control.KubeControlRequires.create_kubeconfig")
+@pytest.mark.usefixtures("integrator", "certificates")
 def test_waits_for_kube_control(mock_create_kubeconfig, harness):
-    harness.set_leader(True)
     harness.begin_with_initial_hooks()
     charm = harness.charm
     assert isinstance(charm.unit.status, BlockedStatus)
@@ -114,50 +141,19 @@ def test_waits_for_kube_control(mock_create_kubeconfig, harness):
         ]
     )
     assert isinstance(charm.unit.status, BlockedStatus)
-    assert charm.unit.status.message == "Missing required config or integrator"
+    assert charm.unit.status.message == "Manifests waiting for definition of control-node-selector"
 
 
-@pytest.mark.usefixtures("certificates", "kube_control")
-def test_waits_for_config(harness, lk_client):
-    # Add the external-cloud-provider relation
-    harness.set_leader(True)
+@pytest.mark.usefixtures("integrator", "certificates", "kube_control", "control_plane")
+def test_waits_for_config(harness, lk_client, caplog):
     harness.begin_with_initial_hooks()
     charm = harness.charm
-    harness.add_relation("external-cloud-provider", "kubernetes-control-plane")
-    assert isinstance(charm.unit.status, BlockedStatus)
-    assert charm.unit.status.message == "Missing required config or integrator"
 
-    # Add the vsphere-integration relation
-    rel_cls = type(charm.integrator)
-    rel_cls.relation = property(rel_cls.relation.func)
-    rel_cls._data = property(rel_cls._data.func)
-    rel_id = harness.add_relation("vsphere-integration", "integrator")
-    assert isinstance(charm.unit.status, WaitingStatus)
-    assert charm.unit.status.message == "Waiting for integrator"
-
-    harness.add_relation_unit(rel_id, "integrator/0")
-    assert isinstance(charm.unit.status, WaitingStatus)
-    assert charm.unit.status.message == "Waiting for integrator"
-
-    harness.update_relation_data(
-        rel_id,
-        "integrator/0",
-        {
-            "vsphere_ip": json.dumps("vsphere.local"),
-            "datacenter": json.dumps("datacenter"),
-            "user": json.dumps("username"),
-            "password": json.dumps("password"),
-            "datastore": json.dumps("datastore"),
-            "repool_path": json.dumps("repool_path"),
-        },
-    )
-    assert isinstance(charm.unit.status, ActiveStatus)
-
-    harness.remove_relation(rel_id)
-    assert isinstance(charm.unit.status, BlockedStatus)
-    assert charm.unit.status.message == "Missing required config or integrator"
+    assert isinstance(charm.unit.status, MaintenanceStatus)
+    assert charm.unit.status.message == "Deploying vSphere Cloud Provider"
 
     lk_client().list.return_value = [mock.Mock(**{"metadata.annotations": {}})]
+    caplog.clear()
     harness.update_config(
         {
             "server": "vsphere.local",
@@ -167,4 +163,24 @@ def test_waits_for_config(harness, lk_client):
             "control-node-selector": 'gcp.io/my-control-node=""',
         }
     )
-    assert isinstance(charm.unit.status, ActiveStatus)
+    assert caplog.messages[:3] == [
+        "Applying Secret Data for server vsphere.local",
+        "Applying ConfigMap Data for vcenter dc1",
+        'Applying Control Node Selector as gcp.io/my-control-node: ""',
+    ]
+
+    caplog.clear()
+    harness.update_config(
+        {
+            "server": "",
+            "username": "",
+            "password": "",
+            "datacenter": "",
+            "control-node-selector": "",
+        }
+    )
+    assert caplog.messages[:3] == [
+        "Applying Secret Data for server 1.2.3.4",
+        "Applying ConfigMap Data for vcenter Elbonia",
+        'Applying Control Node Selector as juju-application: "kubernetes-control-plane"',
+    ]

@@ -1,0 +1,18 @@
+list-versions:
+  description: List Cloud Provider Versions supported by this charm
+list-resources:
+  description: List Cloud Provider Resources
+  params:
+    resources:
+      type: string
+      default: ""
+      description: |
+        Space separated list of kubernetes resource types to filter list result
+scrub-resources:
+  description: Remove deployments other than the current one
+  params:
+    resources:
+      type: string
+      default: ""
+      description: |
+        Space separated list of kubernetes resource types to filter scrubbing   
