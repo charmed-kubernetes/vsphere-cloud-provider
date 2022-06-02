@@ -50,8 +50,8 @@ options:
   release:
     type: string
     description: |
-      Specify the version of cloud-provider as defined by
-      https://github.com/kubernetes/cloud-provider-vsphere/tree/master/releases
+      Specify the version of cloud-provider as defined by the `releases`
+      directory of https://github.com/kubernetes/cloud-provider-vsphere/
 
       example)
         juju config vsphere-cloud-provider release='v1.22'

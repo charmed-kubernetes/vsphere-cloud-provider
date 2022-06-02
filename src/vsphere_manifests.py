@@ -79,7 +79,8 @@ class VsphereManifests(Manifests):
         inner_spec = template and template.get("spec") or {}
         containers = inner_spec and inner_spec.get("containers") or {}
         for container in containers:
-            if full_image := container.get("image"):
+            full_image = container.get("image")
+            if full_image:
                 _, image = full_image.split("/", 1)
                 new_full_image = f"{registry}/{image}"
                 container["image"] = new_full_image
