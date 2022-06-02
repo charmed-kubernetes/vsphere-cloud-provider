@@ -229,8 +229,9 @@ class VsphereCloudProviderCharm(CharmBase):
         self.stored.deployed = True
 
     def _cleanup(self, _event):
-        self.unit.status = MaintenanceStatus("Cleaning up vSphere Cloud Provider")
-        self.backend.remove()
+        if self.stored.config_hash:
+            self.unit.status = MaintenanceStatus("Cleaning up vSphere Cloud Provider")
+            self.manifests.delete_manifests(ignore_unauthorized=True)
         self.unit.status = MaintenanceStatus("Shutting down")
 
 
