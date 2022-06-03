@@ -17,7 +17,7 @@ SECRET_NAME = "vsphere-cloud-secret"
 class VsphereManifests(Manifests):
     """Deployment Specific details for the vsphere-cloud-provider."""
 
-    def __init__(self, charm_name, charm_config, integrator, control_plane):
+    def __init__(self, charm_name, charm_config, integrator, control_plane, kube_control):
         manipulations = [
             self.add_label,
             self.apply_registry,
@@ -28,6 +28,7 @@ class VsphereManifests(Manifests):
         self.charm_config = charm_config
         self.integrator = integrator
         self.control_plane = control_plane
+        self.kube_control = kube_control
         super().__init__(charm_name, manipulations=manipulations)
 
     @property
@@ -35,12 +36,17 @@ class VsphereManifests(Manifests):
         """Returns current config available from charm config and joined relations."""
         config = {}
         if self.integrator.is_ready:
-            config = {
-                "server": self.integrator.vsphere_ip,
-                "username": self.integrator.user,
-                "password": self.integrator.password,
-                "datacenter": self.integrator.datacenter,
-            }
+            config.update(
+                {
+                    "server": self.integrator.vsphere_ip,
+                    "username": self.integrator.user,
+                    "password": self.integrator.password,
+                    "datacenter": self.integrator.datacenter,
+                }
+            )
+        if self.kube_control.is_ready:
+            config["image-registry"] = self.kube_control.registry_location
+
         if self.control_plane:
             config["control-node-selector"] = {"juju-application": self.control_plane.app.name}
 

@@ -72,6 +72,7 @@ def kube_control():
     with mock.patch("charm.KubeControlRequires") as mocked:
         kube_control = mocked.return_value
         kube_control.evaluate_relation.return_value = None
+        kube_control.registry_location = ""
         yield kube_control
 
 

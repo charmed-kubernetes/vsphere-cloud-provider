@@ -50,7 +50,11 @@ class VsphereCloudProviderCharm(CharmBase):
             deployed=False,  # True if the config has been applied after new hash
         )
         self.manifests = VsphereManifests(
-            self.app.name, self.charm_config, self.integrator, self.control_plane_relation
+            self.app.name,
+            self.charm_config,
+            self.integrator,
+            self.control_plane_relation,
+            self.kube_control,
         )
 
         self.framework.observe(self.on.kube_control_relation_created, self._kube_control)
