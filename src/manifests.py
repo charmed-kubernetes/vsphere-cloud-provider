@@ -4,6 +4,7 @@
 
 import abc
 import logging
+import os
 from collections import defaultdict, namedtuple
 from itertools import islice
 from pathlib import Path
@@ -14,6 +15,8 @@ from backports.cached_property import cached_property
 from lightkube import Client, codecs
 from lightkube.core.client import GlobalResource, NamespacedResource
 from lightkube.core.exceptions import ApiError
+from lightkube.models.meta_v1 import ObjectMeta
+from lightkube.resources.core_v1 import Namespace
 
 log = logging.getLogger(__file__)
 AnyResource = Union[NamespacedResource, GlobalResource]
@@ -52,9 +55,12 @@ class _HashableResource:
 class Manifests(abc.ABC):
     """Class used to apply manifest files from a release directory."""
 
-    def __init__(self, charm_name, manipulations=None, default_namespace=""):
+    def __init__(
+        self, charm_name: str, base_path: os.PathLike, manipulations=None, default_namespace=""
+    ):
         self.namespace = default_namespace
         self.charm_name = charm_name
+        self.base_path = Path(base_path)
         self.manipulations = manipulations or []
 
     @cached_property
@@ -67,17 +73,20 @@ class Manifests(abc.ABC):
         """Retrieve the current available config to use during manifest building."""
         ...
 
-    @property
-    def releases(self) -> List[str]:
-        """List All possible releases supported by the charm."""
-        return [
-            manifests.parent.name for manifests in Path("upstream", "manifests").glob("*/*.yaml")
-        ]
+    @cached_property
+    def manifest_path(self) -> Path:
+        """Retrieve the path where the versioned manifests exist."""
+        return self.base_path / "manifests"
 
     @property
     def latest_release(self) -> str:
         """Lookup the latest release supported by the charm."""
-        return Path("upstream", "version").read_text(encoding="utf-8").strip()
+        return (self.base_path / "version").read_text(encoding="utf-8").strip()
+
+    @property
+    def releases(self) -> List[str]:
+        """List All possible releases supported by the charm."""
+        return [manifests.parent.name for manifests in self.manifest_path.glob("*/*.yaml")]
 
     @property
     def current_release(self) -> str:
@@ -89,7 +98,7 @@ class Manifests(abc.ABC):
         """All component resource sets subdivided by kind and namespace."""
         result: Mapping[_NamespaceKind, Set[_HashableResource]] = defaultdict(set)
         ver = self.current_release
-        for manifest in Path("upstream", "manifests", ver).glob("*.yaml"):
+        for manifest in (self.manifest_path / ver).glob("*.yaml"):
             for obj in codecs.load_all_yaml(manifest.read_text()):
                 kind_ns = _NamespaceKind(obj.kind, obj.metadata.namespace)
                 result[kind_ns].add(_HashableResource(obj))
@@ -146,7 +155,8 @@ class Manifests(abc.ABC):
     def apply_manifests(self):
         """Apply all manifest files from the current release."""
         ver = self.current_release
-        for component in Path("upstream", "manifests", ver).glob("*.yaml"):
+        self.create_namespace()
+        for component in (self.manifest_path / ver).glob("*.yaml"):
             self.apply_manifest(component)
 
     def delete_manifests(self, **kwargs):
@@ -163,6 +173,13 @@ class Manifests(abc.ABC):
             namespace = obj.metadata.namespace
             log.info(f"Adding {obj.kind}/{name}" + (f" to {namespace}" if namespace else ""))
             self.client.apply(obj, name)
+
+    def create_namespace(self, namespace=""):
+        """Create the default namespace if available."""
+        which_ns = namespace or self.namespace
+        if which_ns:
+            ns_obj = Namespace(metadata=ObjectMeta(name=which_ns, labels={self.charm_name: True}))
+            self.client.apply(ns_obj, which_ns)
 
     def add_label(self, obj):
         """Ensure every manifest item is labeled with charm name."""

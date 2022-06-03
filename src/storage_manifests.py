@@ -14,7 +14,7 @@ log = logging.getLogger(__file__)
 SECRET_NAME = "vsphere-cloud-secret"
 
 
-class VsphereManifests(Manifests):
+class VsphereStorageManifests(Manifests):
     """Deployment Specific details for the vsphere-cloud-provider."""
 
     def __init__(self, charm_name, charm_config, integrator, control_plane):
@@ -28,7 +28,12 @@ class VsphereManifests(Manifests):
         self.charm_config = charm_config
         self.integrator = integrator
         self.control_plane = control_plane
-        super().__init__(charm_name, manipulations=manipulations)
+        super().__init__(
+            charm_name,
+            "upstream/cloud_storage",
+            manipulations=manipulations,
+            default_namespace="vmware-system-csi",
+        )
 
     @property
     def config(self) -> Dict:
@@ -49,6 +54,8 @@ class VsphereManifests(Manifests):
         for key, value in dict(**config).items():
             if value == "" or value is None:
                 del config[key]
+
+        config["release"] = config.pop("provider-release", None)
 
         return config
 

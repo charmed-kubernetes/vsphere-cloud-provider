@@ -5,24 +5,45 @@
 import argparse
 import json
 import logging
+import re
 import subprocess
 import sys
-import re
-import urllib.request
 import urllib.error
-import yaml
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Generator, List, Optional, Set, Tuple, TypedDict
 
+import yaml
+from semver import VersionInfo
+
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
-# wokeignore:rule=master
-BRANCH = "https://api.github.com/repos/kubernetes/cloud-provider-vsphere/branches/master"
-COMMIT = "https://api.github.com/repos/kubernetes/cloud-provider-vsphere/commits/{sha}"
-# wokeignore:rule=master
-RAW = "https://raw.githubusercontent.com/kubernetes/cloud-provider-vsphere/master/releases/{rel}/vsphere-cloud-controller-manager.yaml"
+GH_REPO = "https://api.github.com/repos/{repo}"
+GH_TAGS = "https://api.github.com/repos/{repo}/tags"
+GH_BRANCH = "https://api.github.com/repos/{repo}/branches/{branch}"
+GH_COMMIT = "https://api.github.com/repos/{repo}/commits/{sha}"
+GH_RAW = "https://raw.githubusercontent.com/{repo}/{branch}/{path}/{rel}/{manifest}"
+
+SOURCES = dict(
+    cloud_provider=dict(
+        repo="kubernetes/cloud-provider-vsphere",
+        manifest="vsphere-cloud-controller-manager.yaml",
+        default_branch=True,
+        path="releases",
+        version_parser=lambda v: tuple(map(int, v[1:].split("."))),
+        minimum="v1.2",
+    ),
+    cloud_storage=dict(
+        repo="kubernetes-sigs/vsphere-csi-driver",
+        manifest="vsphere-csi-driver.yaml",
+        release_tags=True,
+        path="manifests/vanilla",
+        version_parser=VersionInfo.parse,
+        minimum="v2.5.1",
+    ),
+)
 FILEDIR = Path(__file__).parent
 VERSION_RE = re.compile(r"^v\d+\.\d+")
 IMG_RE = re.compile(r"^\s+image:\s+(\S+)")
@@ -30,6 +51,8 @@ IMG_RE = re.compile(r"^\s+image:\s+(\S+)")
 
 @dataclass(frozen=True)
 class Registry:
+    """Object to define how to contact a Registry."""
+
     name: str
     path: str
     user: str
@@ -37,6 +60,7 @@ class Registry:
 
     @property
     def creds(self) -> "SyncCreds":
+        """Get credentials as a SyncCreds Dict."""
         return {
             "registry": self.name,
             "user": self.user,
@@ -46,14 +70,18 @@ class Registry:
 
 @dataclass(frozen=True)
 class Release:
+    """Defines a release type."""
+
     name: str
     path: str
     size: int = 0
 
     def __hash__(self) -> int:
+        """Unique based on its name."""
         return hash(self.name)
 
     def __eq__(self, other) -> bool:
+        """Comparible based on its name."""
         return isinstance(other, Release) and self.name == other.name
 
 
@@ -62,62 +90,95 @@ SyncCreds = TypedDict("SyncCreds", {"registry": str, "user": str, "pass": str})
 
 
 class SyncConfig(TypedDict):
+    """Type definition for building sync config."""
+
     version: int
     creds: List[SyncCreds]
     sync: List[SyncAsset]
 
 
 def sync_asset(image: str, registry: Registry):
+    """Factory for generating SyncAssets."""
     _, tag = image.split("/", 1)
     dest = f"{registry.name}/{registry.path.strip('/')}/{tag}"
     return SyncAsset(source=image, target=dest, type="image")
 
 
-def main(registry: Optional[Registry]):
+def main(source: str, registry: Optional[Registry]):
     """Main update logic."""
-    local_releases = gather_current()
-    latest, gh_releases = gather_releases()
+    local_releases = gather_current(source)
+    latest, gh_releases = gather_releases(source)
     new_releases = gh_releases - local_releases
     for release in new_releases:
-        local_releases.add(download(release))
+        local_releases.add(download(source, release))
     if registry:
-        all_images = [image for release in local_releases for image in images(release)]
+        all_images = set(image for release in local_releases for image in images(release))
         mirror_image(all_images, registry)
     return latest
 
 
-def gather_releases() -> Tuple[str, Set[Release]]:
-    with urllib.request.urlopen(BRANCH) as resp:
-        branch = json.load(resp)
-        sha = branch["commit"]["sha"]
-    with urllib.request.urlopen(COMMIT.format(sha=sha)) as resp:
-        commit = json.load(resp)
-        tree_url = commit["commit"]["tree"]["url"]
-    with urllib.request.urlopen(tree_url) as resp:
-        tree = json.load(resp)
-        path_url = next(path["url"] for path in tree["tree"] if path["path"] == "releases")
-    with urllib.request.urlopen(path_url) as resp:
-        releases = sorted([
-            Release(path["path"], RAW.format(rel=path["path"]))
-            for path in json.load(resp)["tree"]
-            if VERSION_RE.match(path["path"])
-        ], key=lambda r: tuple(map(int, r.name[1:].split("."))), reverse=True)
-    
+def gather_releases(source: str) -> Tuple[str, Set[Release]]:
+    """Fetch from github the release manifests by version."""
+    context = dict(**SOURCES[source])
+    version_parser = context["version_parser"]
+    if context.get("default_branch"):
+        with urllib.request.urlopen(GH_REPO.format(**context)) as resp:
+            context["branch"] = json.load(resp)["default_branch"]
+        with urllib.request.urlopen(GH_BRANCH.format(**context)) as resp:
+            branch = json.load(resp)
+            context["sha"] = branch["commit"]["sha"]
+        with urllib.request.urlopen(GH_COMMIT.format(**context)) as resp:
+            commit = json.load(resp)
+            tree_url = commit["commit"]["tree"]["url"]
+        for part in Path(context["path"]).parts:
+            with urllib.request.urlopen(tree_url) as resp:
+                tree = json.load(resp)
+                tree_url = next(item["url"] for item in tree["tree"] if item["path"] == part)
+        with urllib.request.urlopen(tree_url) as resp:
+            releases = sorted(
+                [
+                    Release(item["path"], GH_RAW.format(rel=item["path"], **context))
+                    for item in json.load(resp)["tree"]
+                    if VERSION_RE.match(item["path"])
+                    and version_parser(context["minimum"]) <= version_parser(item["path"])
+                ],
+                key=lambda r: version_parser(r.name),
+                reverse=True,
+            )
+    elif context.get("release_tags"):
+        with urllib.request.urlopen(GH_TAGS.format(**context)) as resp:
+            releases = sorted(
+                [
+                    Release(item["name"], GH_RAW.format(branch=item["name"], rel="", **context))
+                    for item in json.load(resp)
+                    if (
+                        VERSION_RE.match(item["name"])
+                        and not version_parser(item["name"][1:]).prerelease
+                        and version_parser(context["minimum"][1:])
+                        <= version_parser(item["name"][1:])
+                    )
+                ],
+                key=lambda r: version_parser(r.name[1:]),
+                reverse=True,
+            )
+
     return releases[0].name, set(releases)
 
 
-def gather_current() -> Set[Release]:
+def gather_current(source: str) -> Set[Release]:
+    """Gather currently supported manifests by the charm."""
+    manifest = SOURCES[source]["manifest"]
     return set(
-        Release(
-            release_path.parent.name, str(release_path), release_path.stat().st_size
-        )
-        for release_path in (FILEDIR / "manifests").glob("*/vsphere-cloud-controller-manager.yaml")
+        Release(release_path.parent.name, str(release_path), release_path.stat().st_size)
+        for release_path in (FILEDIR / source / "manifests").glob(f"*/{manifest}")
     )
 
 
-def download(release: Release) -> Release:
-    log.info(f"Getting Release {release.name}")
-    dest = FILEDIR / "manifests" / release.name / "vsphere-cloud-controller-manager.yaml"
+def download(source: str, release: Release) -> Release:
+    """Download the manifest files for a specific release."""
+    log.info(f"Getting Release {source}: {release.name}")
+    manifest = SOURCES[source]["manifest"]
+    dest = FILEDIR / source / "manifests" / release.name / manifest
     dest.parent.mkdir(exist_ok=True)
     urllib.request.urlretrieve(release.path, dest)
     return Release(release.name, str(dest), release.size)
@@ -171,6 +232,17 @@ def get_argparser():
         "(https://github.com/regclient/regclient/releases)\n"
         "and that it is available in the current working directory",
     )
+    parser.add_argument(
+        "--sources",
+        nargs="+",
+        default=list(SOURCES.keys()),
+        choices=SOURCES.keys(),
+        type=str,
+        help="Which manifest sources to be updated.\n\n"
+        "example\n"
+        "  --source cloud_provider\n"
+        "\n",
+    )
     return parser
 
 
@@ -182,9 +254,10 @@ if __name__ == "__main__":
     try:
         args = get_argparser().parse_args()
         registry = Registry(*args.registry) if args.registry else None
-        version = main(registry)
-        Path(FILEDIR, "version").write_text(f"{version}\n")
-        print(version)
+        for source in args.sources:
+            version = main(source, registry)
+            Path(FILEDIR, source, "version").write_text(f"{version}\n")
+            print(f"source: {source} latest={version}")
     except UpdateError as e:
         print(str(e), file=sys.stderr)
         sys.exit(1)

@@ -19,10 +19,10 @@ from ops.model import (
 )
 
 from config import CharmConfig
+from provider_manifests import VsphereProviderManifests
 from requires_certificates import CertificatesRequires
 from requires_kube_control import KubeControlRequires
 from requires_vsphere_integration import VsphereIntegrationRequires
-from vsphere_manifests import VsphereManifests
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class VsphereCloudProviderCharm(CharmBase):
             config_hash=None,  # hashed value of the manifest_config once valid
             deployed=False,  # True if the config has been applied after new hash
         )
-        self.manifests = VsphereManifests(
+        self.manifests = VsphereProviderManifests(
             self.app.name, self.charm_config, self.integrator, self.control_plane_relation
         )
 
