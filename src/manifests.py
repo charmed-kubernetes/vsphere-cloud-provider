@@ -67,12 +67,16 @@ class Manifests(abc.ABC):
         """Retrieve the current available config to use during manifest building."""
         ...
 
-    @property
+    @cached_property
     def releases(self) -> List[str]:
         """List All possible releases supported by the charm."""
-        return [
-            manifests.parent.name for manifests in Path("upstream", "manifests").glob("*/*.yaml")
-        ]
+        return sorted(
+            [
+                manifests.parent.name
+                for manifests in Path("upstream", "manifests").glob("*/*.yaml")
+            ],
+            key=lambda name: tuple(map(int, name[1:].split("."))),
+        )  # sort numerically
 
     @property
     def latest_release(self) -> str:
@@ -97,7 +101,7 @@ class Manifests(abc.ABC):
 
     def status(self) -> Set[_HashableResource]:
         """Returns all objects which have a `.status.conditions` attribute."""
-        objects = (
+        objects = [
             self.client.get(
                 type(obj.rsc),
                 obj.metadata.name,
@@ -105,7 +109,7 @@ class Manifests(abc.ABC):
             )
             for resources in self.resources.values()
             for obj in resources
-        )
+        ]
         return set(
             _HashableResource(obj)
             for obj in objects
@@ -152,8 +156,7 @@ class Manifests(abc.ABC):
     def delete_manifests(self, **kwargs):
         """Delete all manifests associated with the current resources."""
         for resources in self.resources.values():
-            for obj in resources:
-                self.delete_resource(obj, **kwargs)
+            self.delete_resources(*resources, **kwargs)
 
     def apply_manifest(self, filepath: Path):
         """Read file object and apply all objects from the manifest."""
