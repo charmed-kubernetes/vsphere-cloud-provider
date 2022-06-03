@@ -15,6 +15,8 @@ jobs:
   lint-unit:
     name: Lint Unit
     uses: charmed-kubernetes/workflows/.github/workflows/lint-unit.yaml@main
+    needs: 
+      - call-inclusive-naming-check
 
   charmcraft-build:
     name: Build Charm
@@ -54,7 +56,9 @@ jobs:
 
   integration-test:
     name: VSphere Integration Test
-    needs: charmcraft-build
+    needs: 
+      - charmcraft-build
+      - lint-unit
     runs-on: self-hosted
     timeout-minutes: 90
     steps:
