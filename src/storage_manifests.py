@@ -76,7 +76,9 @@ class CreateSecret(Addition):
 class VsphereStorageManifests(Manifests):
     """Deployment Specific details for the vsphere-cloud-provider."""
 
-    def __init__(self, charm_name, charm_config, integrator, control_plane, model_uuid):
+    def __init__(
+        self, charm_name, charm_config, integrator, control_plane, kube_control, model_uuid
+    ):
         manipulations = [
             CreateNamespace(self),
             CreateSecret(self),
@@ -84,16 +86,17 @@ class VsphereStorageManifests(Manifests):
             ApplyRegistry(self),
             ApplyControlNodeSelector(self),
         ]
-        self.charm_config = charm_config
-        self.integrator = integrator
-        self.control_plane = control_plane
-        self.model_uuid = model_uuid
         super().__init__(
             charm_name,
             "upstream/cloud_storage",
             manipulations=manipulations,
             default_namespace="vmware-system-csi",
         )
+        self.charm_config = charm_config
+        self.integrator = integrator
+        self.control_plane = control_plane
+        self.kube_control = kube_control
+        self.model_uuid = model_uuid
 
     @property
     def config(self) -> Dict:
@@ -106,6 +109,9 @@ class VsphereStorageManifests(Manifests):
                 "password": self.integrator.password,
                 "datacenter": self.integrator.datacenter,
             }
+        if self.kube_control.is_ready:
+            config["image-registry"] = self.kube_control.registry_location
+
         if self.control_plane:
             config["control-node-selector"] = {"juju-application": self.control_plane.app.name}
 
@@ -115,7 +121,7 @@ class VsphereStorageManifests(Manifests):
             if value == "" or value is None:
                 del config[key]
 
-        config["release"] = config.pop("provider-release", None)
+        config["release"] = config.pop("storage-release", None)
 
         return config
 

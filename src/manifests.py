@@ -52,7 +52,7 @@ class _HashableResource:
 
 
 class Manipulation:
-    """Class used to support charm deviations from the upstream manifests."""
+    """Class used to support charm deviations from the manifests."""
 
     def __init__(self, manifests: "Manifests") -> None:
         self.manifests = manifests
@@ -149,15 +149,19 @@ class Manifests(abc.ABC):
         """Retrieve the path where the versioned manifests exist."""
         return self.base_path / "manifests"
 
+    @cached_property
+    def releases(self) -> List[str]:
+        """List all possible releases supported by the charm sorted by latest release first."""
+        return sorted(
+            [manifests.parent.name for manifests in self.manifest_path.glob("*/*.yaml")],
+            key=lambda name: tuple(map(int, name[1:].split("."))),
+            reverse=True
+        )  # sort numerically
+
     @property
     def latest_release(self) -> str:
         """Lookup the latest release supported by the charm."""
         return (self.base_path / "version").read_text(encoding="utf-8").strip()
-
-    @property
-    def releases(self) -> List[str]:
-        """List All possible releases supported by the charm."""
-        return [manifests.parent.name for manifests in self.manifest_path.glob("*/*.yaml")]
 
     @property
     def current_release(self) -> str:
@@ -177,7 +181,7 @@ class Manifests(abc.ABC):
 
     def status(self) -> Set[_HashableResource]:
         """Returns all objects which have a `.status.conditions` attribute."""
-        objects = (
+        objects = [
             self.client.get(
                 type(obj.rsc),
                 obj.metadata.name,
@@ -185,7 +189,7 @@ class Manifests(abc.ABC):
             )
             for resources in self.resources.values()
             for obj in resources
-        )
+        ]
         return set(
             _HashableResource(self, obj)
             for obj in objects
@@ -233,8 +237,7 @@ class Manifests(abc.ABC):
     def delete_manifests(self, **kwargs):
         """Delete all manifests associated with the current resources."""
         for resources in self.resources.values():
-            for obj in resources:
-                self.delete_resource(obj, **kwargs)
+            self.delete_resources(*resources, **kwargs)
 
     def apply_manifest(self, filepath: Path):
         """Read file object and apply all objects from the manifest."""

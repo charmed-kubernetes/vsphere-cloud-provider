@@ -52,13 +52,18 @@ class VsphereCloudProviderCharm(CharmBase):
         )
         self.controllers = {
             "provider": VsphereProviderManifests(
-                self.app.name, self.charm_config, self.integrator, self.control_plane_relation
+                self.app.name,
+                self.charm_config,
+                self.integrator,
+                self.control_plane_relation,
+                self.kube_control,
             ),
             "storage": VsphereStorageManifests(
                 self.app.name,
                 self.charm_config,
                 self.integrator,
                 self.control_plane_relation,
+                self.kube_control,
                 self.model.uuid,
             ),
         }

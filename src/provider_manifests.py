@@ -80,7 +80,7 @@ class ApplyControlNodeSelector(Patch):
 class VsphereProviderManifests(Manifests):
     """Deployment Specific details for the vsphere-cloud-provider."""
 
-    def __init__(self, charm_name, charm_config, integrator, control_plane):
+    def __init__(self, charm_name, charm_config, integrator, control_plane, kube_control):
         manipulations = [
             ApplyLabel(self),
             ApplyRegistry(self),
@@ -88,22 +88,28 @@ class VsphereProviderManifests(Manifests):
             ApplyConfigMap(self),
             ApplyControlNodeSelector(self),
         ]
+        super().__init__(charm_name, "upstream/cloud_provider", manipulations=manipulations)
         self.charm_config = charm_config
         self.integrator = integrator
         self.control_plane = control_plane
-        super().__init__(charm_name, "upstream/cloud_provider", manipulations=manipulations)
+        self.kube_control = kube_control
 
     @property
     def config(self) -> Dict:
         """Returns current config available from charm config and joined relations."""
         config = {}
         if self.integrator.is_ready:
-            config = {
-                "server": self.integrator.vsphere_ip,
-                "username": self.integrator.user,
-                "password": self.integrator.password,
-                "datacenter": self.integrator.datacenter,
-            }
+            config.update(
+                {
+                    "server": self.integrator.vsphere_ip,
+                    "username": self.integrator.user,
+                    "password": self.integrator.password,
+                    "datacenter": self.integrator.datacenter,
+                }
+            )
+        if self.kube_control.is_ready:
+            config["image-registry"] = self.kube_control.registry_location
+
         if self.control_plane:
             config["control-node-selector"] = {"juju-application": self.control_plane.app.name}
 

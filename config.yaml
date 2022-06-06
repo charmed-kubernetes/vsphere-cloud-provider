@@ -37,10 +37,10 @@ options:
     description: |
       Source registry of metrics server images.
 
-      By setting to a value, each image listed in the component.yaml
-      has its image-registry replaced. 
+      By setting to a value, each image listed in the releases manifest
+      has its image-registry replaced.
 
-      If unset, the component.yaml will use its default image registry.
+      If unset, the manifests will use the image registry from the kube-control relation
 
       example)
         juju config kubernetes-metrics-server image-registry='rocks.canonical.com:443/cdk'
