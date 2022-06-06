@@ -24,12 +24,6 @@ def harness():
 
 
 @pytest.fixture(autouse=True)
-def lk_client():
-    with mock.patch("manifests.Client") as mock_lightkube:
-        yield mock_lightkube
-
-
-@pytest.fixture(autouse=True)
 def mock_ca_cert(tmpdir):
     ca_cert = Path(tmpdir) / "ca.crt"
     with mock.patch.object(VsphereCloudProviderCharm, "CA_CERT_PATH", ca_cert):
