@@ -141,7 +141,10 @@ def test_waits_for_kube_control(mock_create_kubeconfig, harness):
         ]
     )
     assert isinstance(charm.unit.status, BlockedStatus)
-    assert charm.unit.status.message == "Manifests waiting for definition of control-node-selector"
+    assert (
+        charm.unit.status.message
+        == "Provider manifests waiting for definition of control-node-selector"
+    )
 
 
 @pytest.mark.usefixtures("integrator", "certificates", "kube_control", "control_plane")

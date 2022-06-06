@@ -15,8 +15,6 @@ from backports.cached_property import cached_property
 from lightkube import Client, codecs
 from lightkube.core.client import GlobalResource, NamespacedResource
 from lightkube.core.exceptions import ApiError
-from lightkube.models.meta_v1 import ObjectMeta
-from lightkube.resources.core_v1 import Namespace
 
 log = logging.getLogger(__file__)
 AnyResource = Union[NamespacedResource, GlobalResource]
@@ -30,7 +28,8 @@ class _NamespaceKind(namedtuple("_NamespaceKind", "kind, namespace")):
 
 
 class _HashableResource:
-    def __init__(self, rsc):
+    def __init__(self, manifest, rsc):
+        self.manifest = manifest
         self.rsc = rsc
 
     def uniq(self):
@@ -50,6 +49,78 @@ class _HashableResource:
 
     def __getattr__(self, item):
         return getattr(self.rsc, item)
+
+
+class Manipulation:
+    """Class used to support charm deviations from the upstream manifests."""
+
+    def __init__(self, manifests: "Manifests") -> None:
+        self.manifests = manifests
+
+
+class Patch(Manipulation):
+    """Class used to define how to patch an existing object in the manifests."""
+
+    def __call__(self, obj: Optional[Dict]) -> None:
+        """Method called to optionally update the object before application."""
+        ...
+
+
+class Addition(Manipulation):
+    """Class used to define objects to add to the original manifests."""
+
+    def __call__(self) -> Optional[Dict]:
+        """Method called to optionally create an object."""
+        ...
+
+
+class CreateNamespace(Addition):
+    """Class used to create additional namespace before apply manifests."""
+
+    def __init__(self, manifests: "Manifests", namespace="") -> None:
+        super().__init__(manifests)
+        self.namespace = namespace
+
+    def __call__(self):
+        """Create the default namespace if available."""
+        which_ns = self.namespace or self.manifests.namespace
+        if which_ns:
+            return dict(
+                apiVersion="v1",
+                kind="Namespace",
+                metadata=dict(name=which_ns),
+            )
+
+
+class ApplyLabel(Patch):
+    """Ensure every manifest item is labeled with charm name."""
+
+    def __call__(self, obj):
+        """Adds charm-name label to obj."""
+        obj["metadata"].setdefault("labels", {})
+        obj["metadata"].setdefault("name", "")
+        obj["metadata"]["labels"][self.manifests.charm_name] = "true"
+
+
+class ApplyRegistry(Patch):
+    """Applies image registry to the manifest."""
+
+    def __call__(self, obj):
+        """Uses the image-registry config for the manifest and updates all container images."""
+        registry = self.manifests.config.get("image-registry")
+        if not registry:
+            return
+        spec = obj.get("spec") or {}
+        template = spec and spec.get("template") or {}
+        inner_spec = template and template.get("spec") or {}
+        containers = inner_spec and inner_spec.get("containers") or {}
+        for container in containers:
+            full_image = container.get("image")
+            if full_image:
+                _, image = full_image.split("/", 1)
+                new_full_image = f"{registry}/{image}"
+                container["image"] = new_full_image
+                log.info(f"Replacing Image: {full_image} with {new_full_image}")
 
 
 class Manifests(abc.ABC):
@@ -101,7 +172,7 @@ class Manifests(abc.ABC):
         for manifest in (self.manifest_path / ver).glob("*.yaml"):
             for obj in codecs.load_all_yaml(manifest.read_text()):
                 kind_ns = _NamespaceKind(obj.kind, obj.metadata.namespace)
-                result[kind_ns].add(_HashableResource(obj))
+                result[kind_ns].add(_HashableResource(self, obj))
         return result
 
     def status(self) -> Set[_HashableResource]:
@@ -116,7 +187,7 @@ class Manifests(abc.ABC):
             for obj in resources
         )
         return set(
-            _HashableResource(obj)
+            _HashableResource(self, obj)
             for obj in objects
             if hasattr(obj, "status") and obj.status.conditions
         )
@@ -128,11 +199,12 @@ class Manifests(abc.ABC):
             for obj in resources:
                 result[key].add(
                     _HashableResource(
+                        self,
                         self.client.get(
                             type(obj.rsc),
                             obj.metadata.name,
                             namespace=obj.metadata.namespace,
-                        )
+                        ),
                     )
                 )
         return result
@@ -141,7 +213,7 @@ class Manifests(abc.ABC):
         """All currently installed resources ever labeled by this charm."""
         return {
             key: set(
-                _HashableResource(rsc)
+                _HashableResource(self, rsc)
                 for rsc in self.client.list(
                     type(obj.rsc),
                     namespace=obj.metadata.namespace,
@@ -155,7 +227,6 @@ class Manifests(abc.ABC):
     def apply_manifests(self):
         """Apply all manifest files from the current release."""
         ver = self.current_release
-        self.create_namespace()
         for component in (self.manifest_path / ver).glob("*.yaml"):
             self.apply_manifest(component)
 
@@ -167,40 +238,31 @@ class Manifests(abc.ABC):
 
     def apply_manifest(self, filepath: Path):
         """Read file object and apply all objects from the manifest."""
-        text = self.modify(filepath.read_text())
+        text = self._modify(filepath.read_text())
         for obj in codecs.load_all_yaml(text):
             name = obj.metadata.name
             namespace = obj.metadata.namespace
             log.info(f"Adding {obj.kind}/{name}" + (f" to {namespace}" if namespace else ""))
             self.client.apply(obj, name)
 
-    def create_namespace(self, namespace=""):
-        """Create the default namespace if available."""
-        which_ns = namespace or self.namespace
-        if which_ns:
-            ns_obj = Namespace(metadata=ObjectMeta(name=which_ns, labels={self.charm_name: True}))
-            self.client.apply(ns_obj, which_ns)
-
-    def add_label(self, obj):
-        """Ensure every manifest item is labeled with charm name."""
-        obj["metadata"].setdefault("labels", {})
-        obj["metadata"].setdefault("name", "")
-        obj["metadata"]["labels"][self.charm_name] = "true"
-
-    def modify(self, content: str) -> str:
-        """Load manifest from string content and apply class manipulations."""
+    def _modify(self, content: str) -> str:
         data = [_ for _ in yaml.safe_load_all(content) if _]
 
-        def adjust(obj):
+        def patch(obj):
             for manipulate in self.manipulations:
-                manipulate(obj)
+                if isinstance(manipulate, Patch):
+                    manipulate(obj)
+
+        for manipulate in reversed(self.manipulations):
+            if isinstance(manipulate, Addition):
+                data.insert(0, manipulate())
 
         for part in data:
             if part["kind"] == "List":
                 for item in part["items"]:
-                    adjust(item)
+                    patch(item)
             else:
-                adjust(part)
+                patch(part)
         return yaml.safe_dump_all(data)
 
     def delete_resources(
