@@ -10,8 +10,6 @@ applications:
     trust: true
   vsphere-cloud-provider:
     charm: {{charm}}
-    options:
-      image-registry: rocks.canonical.com/cdk
 relations:
 - - vsphere-cloud-provider:certificates
   - easyrsa:client
