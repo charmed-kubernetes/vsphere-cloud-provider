@@ -21,6 +21,7 @@ from manifests import (
 log = logging.getLogger(__file__)
 SECRET_NAME = "vsphere-config-secret"
 SECRET_DATA = "csi-vsphere.conf"
+STORAGE_CLASS_NAME = "csi-vsphere-{type}"
 
 
 class UpdateDeployment(Patch):
@@ -84,6 +85,31 @@ class CreateSecret(Addition):
         )
 
 
+class CreateStorageClass(Addition):
+    """Create vmware storage class."""
+
+    def __init__(self, manifests: "Manifests", sc_type: str):
+        super().__init__(manifests)
+        self.type = sc_type
+
+    def __call__(self) -> Optional[Dict]:
+        """Craft the storage class object."""
+        storage_name = STORAGE_CLASS_NAME.format(type=self.type)
+        log.info(f"Creating storage class {storage_name}")
+        return dict(
+            apiVersion="storage.k8s.io/v1",
+            kind="StorageClass",
+            metadata=dict(
+                name=storage_name,
+                annotations={
+                    "storageclass.kubernetes.io/is-default-class": "true",
+                },
+            ),
+            provisioner="csi.vsphere.vmware.com",
+            parameters=dict(storagepolicyname="vSAN Default Storage Policy"),
+        )
+
+
 class VsphereStorageManifests(Manifests):
     """Deployment Specific details for the vsphere-cloud-provider."""
 
@@ -102,6 +128,7 @@ class VsphereStorageManifests(Manifests):
             ApplyLabel(self),
             ApplyRegistry(self),
             UpdateDeployment(self),
+            CreateStorageClass(self, "default"),  # creates csi-vsphere-default
         ]
         super().__init__(
             charm_name,
