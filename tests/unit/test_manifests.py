@@ -47,7 +47,7 @@ def test_releases_list(test_manifest):
     assert test_manifest.releases[0] == "v0.3.1"
 
 
-@pytest.mark.parametrize("release, uniqs", [("v0.2", 1), (None, 2)])
+@pytest.mark.parametrize("release, uniqs", [("v0.2", 1), (None, 3)])
 def test_resources_version(test_manifest, release, uniqs):
     test_manifest.data["release"] = release
     rscs = test_manifest.resources
@@ -74,7 +74,7 @@ def test_status(test_manifest):
     with mock.patch.object(test_manifest, "client", new_callable=mock.PropertyMock) as mock_client:
         mock_client.get.return_value.status.conditions = [Condition("False", "Ready")]
         resource_status = test_manifest.status()
-    assert mock_client.get.call_count == 2
+    assert mock_client.get.call_count == 3
     # Because mock_client.get.return_value returns the same for all 7 resources
     # The _HashableResource is the same for each.
     assert len(resource_status) == 1
@@ -84,7 +84,7 @@ def test_expected_resources(test_manifest):
     with mock.patch.object(test_manifest, "client", new_callable=mock.PropertyMock) as mock_client:
         mock_client.get.side_effect = mock_get_responder
         rscs = test_manifest.expected_resources()
-    assert mock_client.get.call_count == 2
+    assert mock_client.get.call_count == 3
 
     key = _NamespaceKind("ServiceAccount", "kube-system")
     assert len(rscs[key]) == 1, "1 service account in kube-system namespace"
@@ -105,7 +105,7 @@ def test_active_resources(test_manifest):
     with mock.patch.object(test_manifest, "client", new_callable=mock.PropertyMock) as mock_client:
         mock_client.list.side_effect = mock_list_responder
         rscs = test_manifest.active_resources()
-    assert mock_client.list.call_count == 2
+    assert mock_client.list.call_count == 3
 
     key = _NamespaceKind("ServiceAccount", "kube-system")
     assert len(rscs[key]) == 1, "1 service account in kube-system namespace"
@@ -135,7 +135,7 @@ def test_delete_one_resource(test_manifest, caplog):
 def test_delete_current_resources(test_manifest, caplog):
     with mock.patch.object(test_manifest, "client", new_callable=mock.PropertyMock) as mock_client:
         test_manifest.delete_manifests()
-    assert len(caplog.messages) == 2, "Should delete the 2 resources in this release"
+    assert len(caplog.messages) == 3, "Should delete the 3 resources in this release"
     assert all(msg.startswith("Deleting") for msg in caplog.messages)
 
     rscs = test_manifest.resources

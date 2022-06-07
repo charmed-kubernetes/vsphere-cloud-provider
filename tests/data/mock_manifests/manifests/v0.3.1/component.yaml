@@ -14,3 +14,26 @@ stringData:
    # NOTE: this is just an example configuration, update with real values based on your environment
   test-manifest.conf: |
     I'm secret information
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: test-manifest-deployment
+  namespace: kube-system
+spec:
+  template:
+    metadata:
+      labels:
+        app: test-manifest-deployment
+    spec:
+      serviceAccountName: test-manifest-manager
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      dnsPolicy: "Default"
+      containers:
+        - name: test-container
+          image: gcr.io/google-samples/hello-app:v1.0

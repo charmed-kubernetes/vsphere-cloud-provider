@@ -96,7 +96,7 @@ class VsphereCloudProviderCharm(CharmBase):
 
     def _list_versions(self, event):
         result = {
-            f"{ctrl} versions": "\n".join(sorted(str(_) for _ in _.releases))
+            f"{ctrl}-versions": "\n".join(sorted(str(_) for _ in _.releases))
             for ctrl, _ in self.controllers.items()
         }
         event.set_results(result)
@@ -168,7 +168,7 @@ class VsphereCloudProviderCharm(CharmBase):
             versions = ", ".join(
                 f"{app}={c.current_release}" for app, c in self.controllers.items()
             )
-            self.model.status_set(versions)
+            self.app.status = ActiveStatus(f"Versions: {versions}")
 
     @property
     def control_plane_relation(self) -> Optional[Relation]:
@@ -244,15 +244,16 @@ class VsphereCloudProviderCharm(CharmBase):
             return
 
         self.unit.status = MaintenanceStatus("Evaluating Manifests")
+        new_hash = 0
         for controller in self.controllers.values():
             evaluation = controller.evaluate()
             if evaluation:
                 self.unit.status = BlockedStatus(evaluation)
                 return
+            new_hash += controller.hash()
 
-            new_hash = controller.hash()
-            if new_hash == self.stored.config_hash:
-                return
+        if new_hash == self.stored.config_hash:
+            return
 
         self.stored.config_hash = new_hash
         self.stored.deployed = False

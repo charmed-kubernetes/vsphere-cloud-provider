@@ -155,7 +155,7 @@ class Manifests(abc.ABC):
         return sorted(
             [manifests.parent.name for manifests in self.manifest_path.glob("*/*.yaml")],
             key=lambda name: tuple(map(int, name[1:].split("."))),
-            reverse=True
+            reverse=True,
         )  # sort numerically
 
     @property
@@ -246,7 +246,7 @@ class Manifests(abc.ABC):
             name = obj.metadata.name
             namespace = obj.metadata.namespace
             log.info(f"Adding {obj.kind}/{name}" + (f" to {namespace}" if namespace else ""))
-            self.client.apply(obj, name)
+            self.client.apply(obj, name, force=True)
 
     def _modify(self, content: str) -> str:
         data = [_ for _ in yaml.safe_load_all(content) if _]

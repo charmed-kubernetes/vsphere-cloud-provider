@@ -26,7 +26,7 @@ class ApplySecrets(Patch):
             log.error("secret data item is None")
             return
         user, passwd, server = secret
-        log.info(f"Applying Secret Data for server {server}")
+        log.info(f"Applying provider secret data for server {server}")
         obj["stringData"] = {f"{server}.username": user, f"{server}.password": passwd}
 
 
@@ -41,10 +41,10 @@ class ApplyConfigMap(Patch):
             return
         config = [self.manifests.config.get(k) for k in ("server", "datacenter")]
         if any(c is None for c in config):
-            log.error("server or datacenter is undefined")
+            log.error("provider ConfigMap server or datacenter is undefined")
             return
         server, datacenter = config
-        log.info(f"Applying ConfigMap Data for vcenter {datacenter}")
+        log.info(f"Applying provider ConfigMap Data for vcenter {datacenter}")
         vsphere_conf = {
             "global": dict(
                 port=443, insecureFlag=True, secretName=SECRET_NAME, secretNamespace="kube-system"
@@ -70,11 +70,13 @@ class ApplyControlNodeSelector(Patch):
             return
         node_selector = self.manifests.config.get("control-node-selector")
         if not isinstance(node_selector, dict):
-            log.error(f"control-node-selector was an unexpected type: {type(node_selector)}")
+            log.error(
+                f"provider control-node-selector was an unexpected type: {type(node_selector)}"
+            )
             return
         obj["spec"]["template"]["spec"]["nodeSelector"] = node_selector
         node_selector_text = " ".join('{0}: "{1}"'.format(*t) for t in node_selector.items())
-        log.info(f"Applying Control Node Selector as {node_selector_text}")
+        log.info(f"Applying provider Control Node Selector as {node_selector_text}")
 
 
 class VsphereProviderManifests(Manifests):
@@ -123,9 +125,9 @@ class VsphereProviderManifests(Manifests):
 
         return config
 
-    def hash(self) -> str:
+    def hash(self) -> int:
         """Calculate a hash of the current configuration."""
-        return md5(json.dumps(self.config, sort_keys=True).encode("utf8")).hexdigest()
+        return int(md5(json.dumps(self.config, sort_keys=True).encode("utf8")).hexdigest(), 16)
 
     def evaluate(self) -> str:
         """Determine if manifest_config can be applied to manifests."""

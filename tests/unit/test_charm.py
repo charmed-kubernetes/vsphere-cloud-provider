@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from ops.model import BlockedStatus, MaintenanceStatus, WaitingStatus
+from ops.model import BlockedStatus, WaitingStatus
 from ops.testing import Harness
 
 from charm import VsphereCloudProviderCharm
@@ -31,13 +31,10 @@ def mock_ca_cert(tmpdir):
 
 
 @pytest.fixture()
-def control_plane():
-    with mock.patch(
-        "charm.VsphereCloudProviderCharm.control_plane_relation", new_callable=mock.PropertyMock
-    ) as mocked:
-        control_plane = mocked.return_value
-        control_plane.app.name = "kubernetes-control-plane"
-        yield control_plane
+def control_plane(harness: Harness):
+    rel_id = harness.add_relation("external-cloud-provider", "kubernetes-control-plane")
+    harness.add_relation_unit(rel_id, "kubernetes-control-plane/0")
+    harness.add_relation_unit(rel_id, "kubernetes-control-plane/1")
 
 
 @pytest.fixture()
@@ -66,7 +63,7 @@ def kube_control():
     with mock.patch("charm.KubeControlRequires") as mocked:
         kube_control = mocked.return_value
         kube_control.evaluate_relation.return_value = None
-        kube_control.registry_location = ""
+        kube_control.registry_location = "rocks.canonical.com/cdk"
         yield kube_control
 
 
@@ -143,12 +140,8 @@ def test_waits_for_kube_control(mock_create_kubeconfig, harness):
 
 
 @pytest.mark.usefixtures("integrator", "certificates", "kube_control", "control_plane")
-def test_waits_for_config(harness, lk_client, caplog):
+def test_waits_for_config(harness: Harness, lk_client, caplog):
     harness.begin_with_initial_hooks()
-    charm = harness.charm
-
-    assert isinstance(charm.unit.status, MaintenanceStatus)
-    assert charm.unit.status.message == "Deploying vSphere Cloud Provider"
 
     lk_client().list.return_value = [mock.Mock(**{"metadata.annotations": {}})]
     caplog.clear()
@@ -161,10 +154,18 @@ def test_waits_for_config(harness, lk_client, caplog):
             "control-node-selector": 'gcp.io/my-control-node=""',
         }
     )
-    assert caplog.messages[:3] == [
-        "Applying Secret Data for server vsphere.local",
-        "Applying ConfigMap Data for vcenter dc1",
-        'Applying Control Node Selector as gcp.io/my-control-node: ""',
+    provider_messages = [r.message for r in caplog.records if "provider" in r.filename]
+    storage_messages = [r.message for r in caplog.records if "storage" in r.filename]
+
+    assert provider_messages == [
+        "Applying provider secret data for server vsphere.local",
+        "Applying provider ConfigMap Data for vcenter dc1",
+        'Applying provider Control Node Selector as gcp.io/my-control-node: ""',
+    ]
+    assert storage_messages == [
+        "Creating storage secret data for server vsphere.local",
+        'Applying storage Control Node Selector as gcp.io/my-control-node: ""',
+        "Setting storage deployment replicas to 2",
     ]
 
     caplog.clear()
@@ -175,10 +176,19 @@ def test_waits_for_config(harness, lk_client, caplog):
             "password": "",
             "datacenter": "",
             "control-node-selector": "",
+            "image-registry": "dockerhub.io",
         }
     )
-    assert caplog.messages[:3] == [
-        "Applying Secret Data for server 1.2.3.4",
-        "Applying ConfigMap Data for vcenter Elbonia",
-        'Applying Control Node Selector as juju-application: "kubernetes-control-plane"',
+    provider_messages = [r.message for r in caplog.records if "provider" in r.filename]
+    storage_messages = [r.message for r in caplog.records if "storage" in r.filename]
+
+    assert provider_messages == [
+        "Applying provider secret data for server 1.2.3.4",
+        "Applying provider ConfigMap Data for vcenter Elbonia",
+        'Applying provider Control Node Selector as juju-application: "kubernetes-control-plane"',
+    ]
+    assert storage_messages == [
+        "Creating storage secret data for server 1.2.3.4",
+        'Applying storage Control Node Selector as juju-application: "kubernetes-control-plane"',
+        "Setting storage deployment replicas to 2",
     ]
