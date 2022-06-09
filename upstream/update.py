@@ -188,7 +188,8 @@ def images(component: Release) -> Generator[str, None, None]:
     """Yield all images from each release."""
     with Path(component.path).open() as fp:
         for line in fp:
-            if m := IMG_RE.match(line):
+            m = IMG_RE.match(line):
+            if m:
                 yield m.groups()[0]
 
 
