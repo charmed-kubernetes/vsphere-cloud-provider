@@ -153,10 +153,10 @@ class VsphereCloudProviderCharm(CharmBase):
 
         unready = []
         for controller in self.controllers.values():
-            for resource in controller.status():
-                for cond in resource.status.conditions:
+            for obj in controller.status():
+                for cond in obj.resource.status.conditions:
                     if cond.status != "True":
-                        unready.append(f"{resource} not {cond.type}")
+                        unready.append(f"{obj} not {cond.type}")
         if unready:
             self.unit.status = WaitingStatus(", ".join(sorted(unready)))
         else:

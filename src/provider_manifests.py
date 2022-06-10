@@ -8,7 +8,7 @@ from typing import Dict
 
 import yaml
 
-from manifests import ApplyLabel, ApplyRegistry, Manifests, Patch
+from manifests import CharmLabel, ConfigRegistry, Manifests, Patch
 
 log = logging.getLogger(__file__)
 SECRET_NAME = "vsphere-cloud-secret"
@@ -81,8 +81,8 @@ class VsphereProviderManifests(Manifests):
 
     def __init__(self, charm_name, charm_config, integrator, control_plane, kube_control):
         manipulations = [
-            ApplyLabel(self),
-            ApplyRegistry(self),
+            CharmLabel(self),
+            ConfigRegistry(self),
             ApplySecrets(self),
             ApplyConfigMap(self),
             ApplyControlNodeSelector(self),

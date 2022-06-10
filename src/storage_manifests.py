@@ -12,8 +12,8 @@ from ops.model import Relation
 
 from manifests import (
     Addition,
-    ApplyLabel,
-    ApplyRegistry,
+    CharmLabel,
+    ConfigRegistry,
     CreateNamespace,
     Manifests,
     Patch,
@@ -56,15 +56,25 @@ class CreateSecret(Addition):
 
     def __call__(self) -> Optional[AnyResource]:
         """Craft the secrets object for the deployment."""
-        secret = [
+        obj = from_dict(
+            dict(
+                apiVersion="v1",
+                kind="Secret",
+                type="Opaque",
+                metadata=dict(name=SECRET_NAME),
+                data=dict(),
+            )
+        )
+        secret_config = [
             self.manifests.config.get(k) for k in ("username", "password", "server", "datacenter")
         ]
-        if any(s is None for s in secret):
+        if any(s is None for s in secret_config):
             log.error("secret data item is None")
-            return
-        user, passwd, server, datacenter = secret
+            return obj
+
+        user, passwd, server, datacenter = secret_config
         log.info(f"Creating storage secret data for server {server}")
-        secret_config = (
+        data = (
             f"[Global]\n"
             f'cluster-id = "{self.manifests.model_uuid}"\n'
             f"\n"
@@ -75,15 +85,8 @@ class CreateSecret(Addition):
             f'port = "443"\n'
             f'datacenters = "{datacenter}"\n'
         ).encode()
-        return from_dict(
-            dict(
-                apiVersion="v1",
-                kind="Secret",
-                type="Opaque",
-                metadata=dict(name=SECRET_NAME),
-                data={SECRET_DATA: base64.b64encode(secret_config).decode("utf-8")},
-            )
-        )
+        obj.data[SECRET_DATA] = base64.b64encode(data).decode("utf-8")
+        return obj
 
 
 class CreateStorageClass(Addition):
@@ -128,8 +131,8 @@ class VsphereStorageManifests(Manifests):
         manipulations = [
             CreateNamespace(self),
             CreateSecret(self),
-            ApplyLabel(self),
-            ApplyRegistry(self),
+            CharmLabel(self),
+            ConfigRegistry(self),
             UpdateDeployment(self),
             CreateStorageClass(self, "default"),  # creates csi-vsphere-default
         ]

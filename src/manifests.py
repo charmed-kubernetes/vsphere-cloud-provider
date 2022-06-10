@@ -27,28 +27,44 @@ class _NamespaceKind(namedtuple("_NamespaceKind", "kind, namespace")):
         return self.kind
 
 
-class _HashableResource:
-    def __init__(self, manifest, rsc):
-        self.manifest = manifest
-        self.rsc = rsc
+class HashableResource:
+    """Wraps a lightkube resource object so it is hashable."""
 
-    def uniq(self):
-        kind = type(self.rsc).__name__
-        ns = self.metadata.namespace
-        name = self.metadata.name
-        return kind, ns, name
+    def __init__(self, resource: AnyResource):
+        self.resource = resource
+
+    def __uniq(self):
+        return self.kind, self.namespace, self.name
+
+    @property
+    def kind(self) -> str:
+        """Return the resource's kind."""
+        return self.resource.kind
+
+    @property
+    def namespace(self) -> Optional[str]:
+        """Return the resource's namespace."""
+        return self.resource.metadata.namespace if self.resource.metadata else None
+
+    @property
+    def name(self) -> Optional[str]:
+        """Return the resource's name."""
+        return self.resource.metadata.name if self.resource.metadata else None
 
     def __str__(self):
-        return "/".join(filter(None, self.uniq()))
+        """String version of the unique parts.
+
+        example: 'kind/[namspace/]name'
+        """
+        return "/".join(filter(None, self.__uniq()))
 
     def __hash__(self):
-        return hash(self.uniq())
+        """Returns a hash of the unique parts."""
+        return hash(self.__uniq())
 
     def __eq__(self, other):
-        return other.uniq() == self.uniq()
-
-    def __getattr__(self, item):
-        return getattr(self.rsc, item)
+        """Comparison only of the unique parts."""
+        return isinstance(other, HashableResource) and other.__uniq() == self.__uniq()
 
 
 class Manipulation:
@@ -61,7 +77,7 @@ class Manipulation:
 class Patch(Manipulation):
     """Class used to define how to patch an existing object in the manifests."""
 
-    def __call__(self, obj: Optional[AnyResource]) -> None:
+    def __call__(self, obj: AnyResource) -> None:
         """Method called to optionally update the object before application."""
         ...
 
@@ -69,7 +85,7 @@ class Patch(Manipulation):
 class Addition(Manipulation):
     """Class used to define objects to add to the original manifests."""
 
-    def __call__(self) -> Optional[AnyResource]:
+    def __call__(self) -> AnyResource:
         """Method called to optionally create an object."""
         ...
 
@@ -94,7 +110,7 @@ class CreateNamespace(Addition):
             )
 
 
-class ApplyLabel(Patch):
+class CharmLabel(Patch):
     """Ensure every manifest item is labeled with charm name."""
 
     def __call__(self, obj: AnyResource):
@@ -103,7 +119,7 @@ class ApplyLabel(Patch):
         obj.metadata.labels[self.manifests.charm_name] = "true"
 
 
-class ApplyRegistry(Patch):
+class ConfigRegistry(Patch):
     """Applies image registry to the manifest."""
 
     def __call__(self, obj):
@@ -167,9 +183,9 @@ class Manifests(abc.ABC):
         return self.config.get("release") or self.latest_release
 
     @property
-    def resources(self) -> Mapping[_NamespaceKind, Set[_HashableResource]]:
+    def resources(self) -> Mapping[_NamespaceKind, Set[HashableResource]]:
         """All component resource sets subdivided by kind and namespace."""
-        result: Mapping[_NamespaceKind, Set[_HashableResource]] = defaultdict(set)
+        result: Mapping[_NamespaceKind, Set[HashableResource]] = defaultdict(set)
         ver = self.current_release
 
         # Generated additions
@@ -177,64 +193,15 @@ class Manifests(abc.ABC):
             if isinstance(manipulate, Addition):
                 obj = manipulate()
                 kind_ns = _NamespaceKind(obj.kind, obj.metadata.namespace)
-                result[kind_ns].add(_HashableResource(self, obj))
+                result[kind_ns].add(HashableResource(obj))
 
         # From static manifests
         for manifest in (self.manifest_path / ver).glob("*.yaml"):
             for obj in self._safe_load(manifest):
                 kind_ns = _NamespaceKind(obj.kind, obj.metadata.namespace)
-                result[kind_ns].add(_HashableResource(self, obj))
+                result[kind_ns].add(HashableResource(obj))
 
         return result
-
-    def status(self) -> Set[_HashableResource]:
-        """Returns all objects which have a `.status.conditions` attribute."""
-        objects = [
-            self.client.get(
-                type(obj.rsc),
-                obj.metadata.name,
-                namespace=obj.metadata.namespace,
-            )
-            for resources in self.resources.values()
-            for obj in resources
-        ]
-        return set(
-            _HashableResource(self, obj)
-            for obj in objects
-            if hasattr(obj, "status") and obj.status.conditions
-        )
-
-    def expected_resources(self) -> Mapping[_NamespaceKind, Set[_HashableResource]]:
-        """All currently installed resources expected by this charm."""
-        result: Mapping[_NamespaceKind, Set[_HashableResource]] = defaultdict(set)
-        for key, resources in self.resources.items():
-            for obj in resources:
-                result[key].add(
-                    _HashableResource(
-                        self,
-                        self.client.get(
-                            type(obj.rsc),
-                            obj.metadata.name,
-                            namespace=obj.metadata.namespace,
-                        ),
-                    )
-                )
-        return result
-
-    def active_resources(self) -> Mapping[_NamespaceKind, Set[_HashableResource]]:
-        """All currently installed resources ever labeled by this charm."""
-        return {
-            key: set(
-                _HashableResource(self, rsc)
-                for rsc in self.client.list(
-                    type(obj.rsc),
-                    namespace=obj.metadata.namespace,
-                    labels={self.charm_name: "true"},
-                )
-            )
-            for key, resources in self.resources.items()
-            for obj in islice(resources, 1)  # take the first element if it exists
-        }
 
     @lru_cache()
     def _safe_load(self, filepath: Path) -> List[AnyResource]:
@@ -250,18 +217,66 @@ class Manifests(abc.ABC):
             for item in (rsc["items"] if rsc["kind"] == "List" else [rsc])
         ]
 
+    def status(self) -> Set[HashableResource]:
+        """Returns all objects which have a `.status.conditions` attribute."""
+        objects = [
+            self.client.get(
+                type(obj.resource),
+                obj.name,
+                namespace=obj.namespace,
+            )
+            for resources in self.resources.values()
+            for obj in resources
+        ]
+        return set(
+            HashableResource(obj)
+            for obj in objects
+            if hasattr(obj, "status") and obj.status.conditions
+        )
+
+    def expected_resources(self) -> Mapping[_NamespaceKind, Set[HashableResource]]:
+        """All currently installed resources expected by this charm."""
+        result: Mapping[_NamespaceKind, Set[HashableResource]] = defaultdict(set)
+        for key, resources in self.resources.items():
+            for obj in resources:
+                result[key].add(
+                    HashableResource(
+                        self.client.get(
+                            type(obj.resource),
+                            obj.name,
+                            namespace=obj.namespace,
+                        ),
+                    )
+                )
+        return result
+
+    def active_resources(self) -> Mapping[_NamespaceKind, Set[HashableResource]]:
+        """All currently installed resources ever labeled by this charm."""
+        return {
+            key: set(
+                HashableResource(rsc)
+                for rsc in self.client.list(
+                    type(obj.resource),
+                    namespace=obj.namespace,
+                    labels={self.charm_name: "true"},
+                )
+            )
+            for key, resources in self.resources.items()
+            for obj in islice(resources, 1)  # take the first element if it exists
+        }
+
     def apply_manifests(self):
         """Apply all manifest files from the current release."""
-        resources = (rsc for s in self.resources.values() for rsc in s)
+        resources = (rsc.resource for s in self.resources.values() for rsc in s)
 
-        for obj in resources:
+        for rsc in resources:
             for manipulate in self.manipulations:
                 if isinstance(manipulate, Patch):
-                    manipulate(obj)
-            name = obj.metadata.name
-            namespace = obj.metadata.namespace
-            log.info(f"Applying {obj.kind}/{name}" + (f" to {namespace}" if namespace else ""))
-            self.client.apply(obj, name, force=True)
+                    manipulate(rsc)
+            name = rsc.metadata.name
+            namespace = rsc.metadata.namespace
+            log.info(f"Applying {rsc.kind}/{name}" + (f" to {namespace}" if namespace else ""))
+            self.client.apply(rsc, name, force=True)
 
     def delete_manifests(self, **kwargs):
         """Delete all manifests associated with the current resources."""
@@ -270,7 +285,7 @@ class Manifests(abc.ABC):
 
     def delete_resources(
         self,
-        *resources: _HashableResource,
+        *resources: HashableResource,
         namespace: Optional[str] = None,
         ignore_not_found: bool = False,
         ignore_unauthorized: bool = False,
@@ -278,9 +293,9 @@ class Manifests(abc.ABC):
         """Delete named resources."""
         for obj in resources:
             try:
-                namespace = obj.metadata.namespace or namespace
+                namespace = obj.namespace or namespace
                 log.info(f"Deleting {obj}")
-                self.client.delete(type(obj.rsc), obj.metadata.name, namespace=namespace)
+                self.client.delete(type(obj.resource), obj.name, namespace=namespace)
             except ApiError as err:
                 if err.status.message is not None:
                     err_lower = err.status.message.lower()
