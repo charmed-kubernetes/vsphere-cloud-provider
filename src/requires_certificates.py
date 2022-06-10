@@ -111,6 +111,7 @@ class CertificatesRequires(Object):
             if no_relation:
                 return f"Missing required {self.endpoint}"
             return f"Waiting for {self.endpoint}"
+        return None
 
     @property
     def is_ready(self):

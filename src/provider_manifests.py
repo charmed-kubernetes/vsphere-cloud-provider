@@ -4,7 +4,7 @@
 import json
 import logging
 from hashlib import md5
-from typing import Dict
+from typing import Dict, Optional
 
 import yaml
 
@@ -126,10 +126,11 @@ class VsphereProviderManifests(Manifests):
         """Calculate a hash of the current configuration."""
         return int(md5(json.dumps(self.config, sort_keys=True).encode("utf8")).hexdigest(), 16)
 
-    def evaluate(self) -> str:
+    def evaluate(self) -> Optional[str]:
         """Determine if manifest_config can be applied to manifests."""
         props = ["server", "username", "password", "datacenter", "control-node-selector"]
         for prop in props:
             value = self.config.get(prop)
             if not value:
                 return f"Provider manifests waiting for definition of {prop}"
+        return None

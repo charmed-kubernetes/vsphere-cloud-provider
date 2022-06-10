@@ -10,7 +10,7 @@ import json
 import logging
 from os import PathLike
 from pathlib import Path
-from typing import Mapping, Optional
+from typing import List, Mapping, Optional
 
 import jsonschema
 import yaml
@@ -117,6 +117,7 @@ class KubeControlRequires(Object):
             if no_relation:
                 return f"Missing required {self.endpoint} relation"
             return f"Waiting for {self.endpoint} relation"
+        return None
 
     @property
     def is_ready(self):
@@ -139,8 +140,9 @@ class KubeControlRequires(Object):
 
         cluster = "juju-cluster"
         context = "juju-context"
-        server = self.api_endpoints[0]
-        token = creds["client_token"]
+        endpoints = self.api_endpoints
+        server = endpoints[0] if endpoints else None
+        token = creds["client_token"] if creds else None
         ca_b64 = base64.b64encode(Path(ca).read_bytes()).decode("utf-8")
 
         # Create the config file with the address of the control-plane server.
@@ -175,7 +177,7 @@ class KubeControlRequires(Object):
             new_kubeconfig.rename(old_kubeconfig)
 
     @property
-    def api_endpoints(self):
+    def api_endpoints(self) -> Optional[List[str]]:
         """The api-endpoints value."""
         return self._value("api-endpoints")
 

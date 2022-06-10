@@ -111,10 +111,10 @@ def main(source: str, registry: Optional[Registry]):
     new_releases = gh_releases - local_releases
     for release in new_releases:
         local_releases.add(download(source, release))
+    all_images = set(image for release in local_releases for image in images(release))
     if registry:
-        all_images = set(image for release in local_releases for image in images(release))
         mirror_image(all_images, registry)
-    return latest
+    return latest, all_images
 
 
 def gather_releases(source: str) -> Tuple[str, Set[Release]]:
@@ -255,10 +255,15 @@ if __name__ == "__main__":
     try:
         args = get_argparser().parse_args()
         registry = Registry(*args.registry) if args.registry else None
+        image_set = set()
         for source in args.sources:
-            version = main(source, registry)
+            version, source_images = main(source, registry)
             Path(FILEDIR, source, "version").write_text(f"{version}\n")
             print(f"source: {source} latest={version}")
+            image_set |= source_images
+        print("images:")
+        for image in sorted(image_set):
+            print(image)
     except UpdateError as e:
         print(str(e), file=sys.stderr)
         sys.exit(1)

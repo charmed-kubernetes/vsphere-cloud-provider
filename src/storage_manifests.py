@@ -5,7 +5,7 @@ import base64
 import json
 import logging
 from hashlib import md5
-from typing import Dict, Mapping, Optional
+from typing import Dict, Optional
 
 from lightkube.codecs import AnyResource, from_dict
 from ops.model import Relation
@@ -66,17 +66,18 @@ class CreateSecret(Addition):
             )
         )
         secret_config = [
-            self.manifests.config.get(k) for k in ("username", "password", "server", "datacenter")
+            self.manifests.config.get(k)
+            for k in ("username", "password", "server", "datacenter", "model-uuid")
         ]
         if any(s is None for s in secret_config):
             log.error("secret data item is None")
             return obj
 
-        user, passwd, server, datacenter = secret_config
+        user, passwd, server, datacenter, model_uuid = secret_config
         log.info(f"Creating storage secret data for server {server}")
         data = (
             f"[Global]\n"
-            f'cluster-id = "{self.manifests.model_uuid}"\n'
+            f'cluster-id = "{model_uuid}"\n'
             f"\n"
             f'[VirtualCenter "{server}"]\n'
             f'insecure-flag = "true"\n'
@@ -122,7 +123,7 @@ class VsphereStorageManifests(Manifests):
     def __init__(
         self,
         charm_name: str,
-        charm_config: Mapping[str, str],
+        charm_config,
         integrator,
         control_plane: Relation,
         kube_control,
@@ -151,14 +152,12 @@ class VsphereStorageManifests(Manifests):
     @property
     def config(self) -> Dict:
         """Returns current config available from charm config and joined relations."""
-        config = {}
+        config: Dict = {"model-uuid": self.model_uuid}
         if self.integrator.is_ready:
-            config = {
-                "server": self.integrator.vsphere_ip,
-                "username": self.integrator.user,
-                "password": self.integrator.password,
-                "datacenter": self.integrator.datacenter,
-            }
+            config["server"] = self.integrator.vsphere_ip
+            config["username"] = self.integrator.user
+            config["password"] = self.integrator.password
+            config["datacenter"] = self.integrator.datacenter
         if self.kube_control.is_ready:
             config["image-registry"] = self.kube_control.registry_location
 
@@ -180,10 +179,11 @@ class VsphereStorageManifests(Manifests):
         """Calculate a hash of the current configuration."""
         return int(md5(json.dumps(self.config, sort_keys=True).encode("utf8")).hexdigest(), 16)
 
-    def evaluate(self) -> str:
+    def evaluate(self) -> Optional[str]:
         """Determine if manifest_config can be applied to manifests."""
         props = ["server", "username", "password", "datacenter", "control-node-selector"]
         for prop in props:
             value = self.config.get(prop)
             if not value:
                 return f"Storage manifests waiting for definition of {prop}"
+        return None

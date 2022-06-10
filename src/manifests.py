@@ -9,7 +9,7 @@ from collections import defaultdict, namedtuple
 from functools import lru_cache
 from itertools import islice
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Set
+from typing import Dict, List, Mapping, Optional, Set, Union
 
 import yaml
 from backports.cached_property import cached_property
@@ -18,6 +18,8 @@ from lightkube.codecs import AnyResource
 from lightkube.core.exceptions import ApiError
 
 log = logging.getLogger(__file__)
+
+PathLike = Union[str, os.PathLike]
 
 
 class _NamespaceKind(namedtuple("_NamespaceKind", "kind, namespace")):
@@ -141,7 +143,7 @@ class Manifests(abc.ABC):
     """Class used to apply manifest files from a release directory."""
 
     def __init__(
-        self, charm_name: str, base_path: os.PathLike, manipulations=None, default_namespace=""
+        self, charm_name: str, base_path: PathLike, manipulations=None, default_namespace=""
     ):
         self.namespace = default_namespace
         self.charm_name = charm_name
