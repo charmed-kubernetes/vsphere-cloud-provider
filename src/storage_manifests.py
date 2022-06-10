@@ -7,6 +7,7 @@ import logging
 from hashlib import md5
 from typing import Dict, Mapping, Optional
 
+from lightkube.codecs import AnyResource, from_dict
 from ops.model import Relation
 
 from manifests import (
@@ -29,9 +30,7 @@ class UpdateDeployment(Patch):
 
     def __call__(self, obj):
         """Apply control node selector and replica count to the deployment."""
-        if not (
-            obj.get("kind") == "Deployment" and obj["metadata"]["name"] == "vsphere-csi-controller"
-        ):
+        if not (obj.kind == "Deployment" and obj.metadata.name == "vsphere-csi-controller"):
             return
         node_selector = self.manifests.config.get("control-node-selector")
         if not isinstance(node_selector, dict):
@@ -40,22 +39,22 @@ class UpdateDeployment(Patch):
             )
             return
 
-        obj["spec"]["template"]["spec"]["nodeSelector"] = node_selector
+        obj.spec.template.spec.nodeSelector = node_selector
         node_selector_text = " ".join('{0}: "{1}"'.format(*t) for t in node_selector.items())
         log.info(f"Applying storage Control Node Selector as {node_selector_text}")
 
         replicas = self.manifests.config.get("replicas")
         if not replicas:
-            log.warning(f"Using storage default replicas of {obj['spec']['replicas']}")
+            log.warning(f"Using storage default replicas of {obj.spec.replicas}")
             return
-        obj["spec"]["replicas"] = replicas
+        obj.spec.replicas = replicas
         log.info(f"Setting storage deployment replicas to {replicas}")
 
 
 class CreateSecret(Addition):
     """Create secret for the deployment."""
 
-    def __call__(self) -> Optional[Dict]:
+    def __call__(self) -> Optional[AnyResource]:
         """Craft the secrets object for the deployment."""
         secret = [
             self.manifests.config.get(k) for k in ("username", "password", "server", "datacenter")
@@ -76,12 +75,14 @@ class CreateSecret(Addition):
             f'port = "443"\n'
             f'datacenters = "{datacenter}"\n'
         ).encode()
-        return dict(
-            apiVersion="v1",
-            kind="Secret",
-            type="Opaque",
-            metadata=dict(name=SECRET_NAME),
-            data={SECRET_DATA: base64.b64encode(secret_config).decode("utf-8")},
+        return from_dict(
+            dict(
+                apiVersion="v1",
+                kind="Secret",
+                type="Opaque",
+                metadata=dict(name=SECRET_NAME),
+                data={SECRET_DATA: base64.b64encode(secret_config).decode("utf-8")},
+            )
         )
 
 
@@ -92,21 +93,23 @@ class CreateStorageClass(Addition):
         super().__init__(manifests)
         self.type = sc_type
 
-    def __call__(self) -> Optional[Dict]:
+    def __call__(self) -> Optional[AnyResource]:
         """Craft the storage class object."""
         storage_name = STORAGE_CLASS_NAME.format(type=self.type)
         log.info(f"Creating storage class {storage_name}")
-        return dict(
-            apiVersion="storage.k8s.io/v1",
-            kind="StorageClass",
-            metadata=dict(
-                name=storage_name,
-                annotations={
-                    "storageclass.kubernetes.io/is-default-class": "true",
-                },
-            ),
-            provisioner="csi.vsphere.vmware.com",
-            parameters=dict(storagepolicyname="vSAN Default Storage Policy"),
+        return from_dict(
+            dict(
+                apiVersion="storage.k8s.io/v1",
+                kind="StorageClass",
+                metadata=dict(
+                    name=storage_name,
+                    annotations={
+                        "storageclass.kubernetes.io/is-default-class": "true",
+                    },
+                ),
+                provisioner="csi.vsphere.vmware.com",
+                parameters=dict(storagepolicyname="vSAN Default Storage Policy"),
+            )
         )
 
 

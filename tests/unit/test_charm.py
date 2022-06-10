@@ -163,8 +163,8 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
         'Applying provider Control Node Selector as gcp.io/my-control-node: ""',
     ]
     assert storage_messages == [
-        "Creating storage class csi-vsphere-default",
         "Creating storage secret data for server vsphere.local",
+        "Creating storage class csi-vsphere-default",
         'Applying storage Control Node Selector as gcp.io/my-control-node: ""',
         "Setting storage deployment replicas to 2",
     ]
@@ -189,8 +189,8 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
         'Applying provider Control Node Selector as juju-application: "kubernetes-control-plane"',
     ]
     assert storage_messages == [
-        "Creating storage class csi-vsphere-default",
         "Creating storage secret data for server 1.2.3.4",
+        "Creating storage class csi-vsphere-default",
         'Applying storage Control Node Selector as juju-application: "kubernetes-control-plane"',
         "Setting storage deployment replicas to 2",
     ]

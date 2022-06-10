@@ -19,7 +19,7 @@ class ApplySecrets(Patch):
 
     def __call__(self, obj):
         """Update the secrets object in the deployment."""
-        if not (obj.get("kind") == "Secret" and obj["metadata"]["name"] == SECRET_NAME):
+        if not (obj.kind == "Secret" and obj.metadata.name == SECRET_NAME):
             return
         secret = [self.manifests.config.get(k) for k in ("username", "password", "server")]
         if any(s is None for s in secret):
@@ -27,7 +27,7 @@ class ApplySecrets(Patch):
             return
         user, passwd, server = secret
         log.info(f"Applying provider secret data for server {server}")
-        obj["stringData"] = {f"{server}.username": user, f"{server}.password": passwd}
+        obj.stringData = {f"{server}.username": user, f"{server}.password": passwd}
 
 
 class ApplyConfigMap(Patch):
@@ -35,9 +35,7 @@ class ApplyConfigMap(Patch):
 
     def __call__(self, obj):
         """Update the ConfigMap object in the deployment."""
-        if not (
-            obj.get("kind") == "ConfigMap" and obj["metadata"]["name"] == "vsphere-cloud-config"
-        ):
+        if not (obj.kind == "ConfigMap" and obj.metadata.name == "vsphere-cloud-config"):
             return
         config = [self.manifests.config.get(k) for k in ("server", "datacenter")]
         if any(c is None for c in config):
@@ -55,7 +53,7 @@ class ApplyConfigMap(Patch):
                 )
             },
         }
-        obj["data"]["vsphere.conf"] = yaml.safe_dump(vsphere_conf)
+        obj.data["vsphere.conf"] = yaml.safe_dump(vsphere_conf)
 
 
 class ApplyControlNodeSelector(Patch):
@@ -64,8 +62,7 @@ class ApplyControlNodeSelector(Patch):
     def __call__(self, obj):
         """Update the DaemonSet object in the deployment."""
         if not (
-            obj.get("kind") == "DaemonSet"
-            and obj["metadata"]["name"] == "vsphere-cloud-controller-manager"
+            obj.kind == "DaemonSet" and obj.metadata.name == "vsphere-cloud-controller-manager"
         ):
             return
         node_selector = self.manifests.config.get("control-node-selector")
@@ -74,7 +71,7 @@ class ApplyControlNodeSelector(Patch):
                 f"provider control-node-selector was an unexpected type: {type(node_selector)}"
             )
             return
-        obj["spec"]["template"]["spec"]["nodeSelector"] = node_selector
+        obj.spec.template.spec.nodeSelector = node_selector
         node_selector_text = " ".join('{0}: "{1}"'.format(*t) for t in node_selector.items())
         log.info(f"Applying provider Control Node Selector as {node_selector_text}")
 

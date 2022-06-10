@@ -6,18 +6,18 @@ import abc
 import logging
 import os
 from collections import defaultdict, namedtuple
+from functools import lru_cache
 from itertools import islice
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Set, Union
+from typing import Dict, List, Mapping, Optional, Set
 
 import yaml
 from backports.cached_property import cached_property
 from lightkube import Client, codecs
-from lightkube.core.client import GlobalResource, NamespacedResource
+from lightkube.codecs import AnyResource
 from lightkube.core.exceptions import ApiError
 
 log = logging.getLogger(__file__)
-AnyResource = Union[NamespacedResource, GlobalResource]
 
 
 class _NamespaceKind(namedtuple("_NamespaceKind", "kind, namespace")):
@@ -61,7 +61,7 @@ class Manipulation:
 class Patch(Manipulation):
     """Class used to define how to patch an existing object in the manifests."""
 
-    def __call__(self, obj: Optional[Dict]) -> None:
+    def __call__(self, obj: Optional[AnyResource]) -> None:
         """Method called to optionally update the object before application."""
         ...
 
@@ -69,7 +69,7 @@ class Patch(Manipulation):
 class Addition(Manipulation):
     """Class used to define objects to add to the original manifests."""
 
-    def __call__(self) -> Optional[Dict]:
+    def __call__(self) -> Optional[AnyResource]:
         """Method called to optionally create an object."""
         ...
 
@@ -85,21 +85,22 @@ class CreateNamespace(Addition):
         """Create the default namespace if available."""
         which_ns = self.namespace or self.manifests.namespace
         if which_ns:
-            return dict(
-                apiVersion="v1",
-                kind="Namespace",
-                metadata=dict(name=which_ns),
+            return codecs.from_dict(
+                dict(
+                    apiVersion="v1",
+                    kind="Namespace",
+                    metadata=dict(name=which_ns),
+                )
             )
 
 
 class ApplyLabel(Patch):
     """Ensure every manifest item is labeled with charm name."""
 
-    def __call__(self, obj):
+    def __call__(self, obj: AnyResource):
         """Adds charm-name label to obj."""
-        obj["metadata"].setdefault("labels", {})
-        obj["metadata"].setdefault("name", "")
-        obj["metadata"]["labels"][self.manifests.charm_name] = "true"
+        obj.metadata.labels = obj.metadata.labels or {}  # ensure object has labels
+        obj.metadata.labels[self.manifests.charm_name] = "true"
 
 
 class ApplyRegistry(Patch):
@@ -110,17 +111,14 @@ class ApplyRegistry(Patch):
         registry = self.manifests.config.get("image-registry")
         if not registry:
             return
-        spec = obj.get("spec") or {}
-        template = spec and spec.get("template") or {}
-        inner_spec = template and template.get("spec") or {}
-        containers = inner_spec and inner_spec.get("containers") or {}
-        for container in containers:
-            full_image = container.get("image")
-            if full_image:
-                _, image = full_image.split("/", 1)
-                new_full_image = f"{registry}/{image}"
-                container["image"] = new_full_image
-                log.info(f"Replacing Image: {full_image} with {new_full_image}")
+        if obj.kind in ["DaemonSet", "Deployment"]:
+            for container in obj.spec.template.spec.containers:
+                full_image = container.image
+                if full_image:
+                    _, image = full_image.split("/", 1)
+                    new_full_image = f"{registry}/{image}"
+                    container.image = new_full_image
+                    log.info(f"Replacing Image: {full_image} with {new_full_image}")
 
 
 class Manifests(abc.ABC):
@@ -158,7 +156,7 @@ class Manifests(abc.ABC):
             reverse=True,
         )  # sort numerically
 
-    @property
+    @cached_property
     def latest_release(self) -> str:
         """Lookup the latest release supported by the charm."""
         return (self.base_path / "version").read_text(encoding="utf-8").strip()
@@ -168,15 +166,25 @@ class Manifests(abc.ABC):
         """Determine the current release from charm config."""
         return self.config.get("release") or self.latest_release
 
-    @cached_property
+    @property
     def resources(self) -> Mapping[_NamespaceKind, Set[_HashableResource]]:
         """All component resource sets subdivided by kind and namespace."""
         result: Mapping[_NamespaceKind, Set[_HashableResource]] = defaultdict(set)
         ver = self.current_release
-        for manifest in (self.manifest_path / ver).glob("*.yaml"):
-            for obj in codecs.load_all_yaml(manifest.read_text()):
+
+        # Generated additions
+        for manipulate in self.manipulations:
+            if isinstance(manipulate, Addition):
+                obj = manipulate()
                 kind_ns = _NamespaceKind(obj.kind, obj.metadata.namespace)
                 result[kind_ns].add(_HashableResource(self, obj))
+
+        # From static manifests
+        for manifest in (self.manifest_path / ver).glob("*.yaml"):
+            for obj in self._safe_load(manifest):
+                kind_ns = _NamespaceKind(obj.kind, obj.metadata.namespace)
+                result[kind_ns].add(_HashableResource(self, obj))
+
         return result
 
     def status(self) -> Set[_HashableResource]:
@@ -228,45 +236,37 @@ class Manifests(abc.ABC):
             for obj in islice(resources, 1)  # take the first element if it exists
         }
 
+    @lru_cache()
+    def _safe_load(self, filepath: Path) -> List[AnyResource]:
+        """Read manifest file and parse its content into lightkube objects.
+
+        Lightkube can't properly read manifest files which contain List kinds.
+        """
+        content = filepath.read_text()
+        return [
+            codecs.from_dict(item)  # Map to lightkube resources
+            for rsc in yaml.safe_load_all(content)  # load content from file
+            if rsc  # ignore empty objects
+            for item in (rsc["items"] if rsc["kind"] == "List" else [rsc])
+        ]
+
     def apply_manifests(self):
         """Apply all manifest files from the current release."""
-        ver = self.current_release
-        for component in (self.manifest_path / ver).glob("*.yaml"):
-            self.apply_manifest(component)
+        resources = (rsc for s in self.resources.values() for rsc in s)
+
+        for obj in resources:
+            for manipulate in self.manipulations:
+                if isinstance(manipulate, Patch):
+                    manipulate(obj)
+            name = obj.metadata.name
+            namespace = obj.metadata.namespace
+            log.info(f"Applying {obj.kind}/{name}" + (f" to {namespace}" if namespace else ""))
+            self.client.apply(obj, name, force=True)
 
     def delete_manifests(self, **kwargs):
         """Delete all manifests associated with the current resources."""
         for resources in self.resources.values():
             self.delete_resources(*resources, **kwargs)
-
-    def apply_manifest(self, filepath: Path):
-        """Read file object and apply all objects from the manifest."""
-        text = self._modify(filepath.read_text())
-        for obj in codecs.load_all_yaml(text):
-            name = obj.metadata.name
-            namespace = obj.metadata.namespace
-            log.info(f"Adding {obj.kind}/{name}" + (f" to {namespace}" if namespace else ""))
-            self.client.apply(obj, name, force=True)
-
-    def _modify(self, content: str) -> str:
-        data = [_ for _ in yaml.safe_load_all(content) if _]
-
-        def patch(obj):
-            for manipulate in self.manipulations:
-                if isinstance(manipulate, Patch):
-                    manipulate(obj)
-
-        for manipulate in reversed(self.manipulations):
-            if isinstance(manipulate, Addition):
-                data.insert(0, manipulate())
-
-        for part in data:
-            if part["kind"] == "List":
-                for item in part["items"]:
-                    patch(item)
-            else:
-                patch(part)
-        return yaml.safe_dump_all(data)
 
     def delete_resources(
         self,
