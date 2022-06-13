@@ -3,10 +3,15 @@
 name: vsphere-cloud-provider
 display-name: vSphere Cloud Provider
 summary: Runs the vSphere Cloud Provider in the cluster.
+docs: https://discourse.charmhub.io/t/vsphere-cloud-provider-docs-index/6563
 description: >-
   The vSphere cloud provider provides the Kubernetes cluster access to
-  native resources from vSphere, such as storage and load balancers.
+  native resources from vSphere such as storage.
 subordinate: true
+tags:
+  - kubernetes
+  - cloud-provider
+  - vsphere
 provides:
   external-cloud-provider:
     interface: external_cloud_provider
