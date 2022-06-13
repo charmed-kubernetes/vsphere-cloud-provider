@@ -74,6 +74,7 @@ class VsphereIntegrationRequires(Object):
             if no_relation:
                 return f"Missing required {self.endpoint} relation"
             return f"Waiting for {self.endpoint} relation"
+        return None
 
     @property
     def is_ready(self):

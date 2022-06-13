@@ -28,6 +28,23 @@ tox --notest -e unit
 source .tox/unit/bin/activate
 ```
 
+### Updating Upstream images
+
+One may update the manifest files used by this charm using the tox action.
+
+```shell
+## Print the Help
+tox -e update -- --help
+
+## checks if upstream sources have new manifests, and add them to the upstream folder
+tox -e update --  
+
+## checks if upstream sources have new manifests, and add them to the upstream folder
+## Also sync the manifest images to a container registry.  
+## this command requires the `regsync` binary
+tox -e update -- --registry <registry:port> <sub/path> <user> <password-file>
+```
+
 ### Testing
 
 ```shell

@@ -1,0 +1,39 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-manifest-manager
+  namespace: kube-system
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-manifest-secret
+  namespace: kube-system
+stringData:
+   # NOTE: this is just an example configuration, update with real values based on your environment
+  test-manifest.conf: |
+    I'm secret information
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: test-manifest-deployment
+  namespace: kube-system
+spec:
+  template:
+    metadata:
+      labels:
+        app: test-manifest-deployment
+    spec:
+      serviceAccountName: test-manifest-manager
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      dnsPolicy: "Default"
+      containers:
+        - name: test-container
+          image: gcr.io/google-samples/hello-app:v1.0

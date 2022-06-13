@@ -19,10 +19,11 @@ from ops.model import (
 )
 
 from config import CharmConfig
+from provider_manifests import VsphereProviderManifests
 from requires_certificates import CertificatesRequires
 from requires_kube_control import KubeControlRequires
 from requires_vsphere_integration import VsphereIntegrationRequires
-from vsphere_manifests import VsphereManifests
+from storage_manifests import VsphereStorageManifests
 
 log = logging.getLogger(__name__)
 
@@ -46,16 +47,26 @@ class VsphereCloudProviderCharm(CharmBase):
 
         self.CA_CERT_PATH.parent.mkdir(exist_ok=True)
         self.stored.set_default(
-            config_hash=None,  # hashed value of the manifest_config once valid
+            config_hash=None,  # hashed value of the provider config once valid
             deployed=False,  # True if the config has been applied after new hash
         )
-        self.manifests = VsphereManifests(
-            self.app.name,
-            self.charm_config,
-            self.integrator,
-            self.control_plane_relation,
-            self.kube_control,
-        )
+        self.controllers = {
+            "provider": VsphereProviderManifests(
+                self.app.name,
+                self.charm_config,
+                self.integrator,
+                self.control_plane_relation,
+                self.kube_control,
+            ),
+            "storage": VsphereStorageManifests(
+                self.app.name,
+                self.charm_config,
+                self.integrator,
+                self.control_plane_relation,
+                self.kube_control,
+                self.model.uuid,
+            ),
+        }
 
         self.framework.observe(self.on.kube_control_relation_created, self._kube_control)
         self.framework.observe(self.on.kube_control_relation_joined, self._kube_control)
@@ -85,27 +96,39 @@ class VsphereCloudProviderCharm(CharmBase):
 
     def _list_versions(self, event):
         result = {
-            "versions": "\n".join(sorted(str(_) for _ in self.manifests.releases)),
+            f"{ctrl}-versions": "\n".join(sorted(str(_) for _ in _.releases))
+            for ctrl, _ in self.controllers.items()
         }
         event.set_results(result)
 
     def _list_resources(self, event):
+        ctrl_filter = [_.lower() for _ in event.params.get("controller", "").split()]
+        if ctrl_filter:
+            event.log(f"Filter controllers listing with {ctrl_filter}")
+        ctrl_filter = set(ctrl_filter) or set(self.controllers.keys())
+
         res_filter = [_.lower() for _ in event.params.get("resources", "").split()]
         if res_filter:
             event.log(f"Filter resource listing with {res_filter}")
-        current = self.manifests.active_resources()
-        expected = self.manifests.expected_resources()
+        res_filter = set(res_filter)
+
         correct, extra, missing = (
             set(),
             set(),
             set(),
         )
-        for kind_ns, current_set in current.items():
-            if not res_filter or kind_ns.kind.lower() in res_filter:
-                expected_set = expected[kind_ns]
-                correct |= current_set & expected_set
-                extra |= current_set - expected_set
-                missing |= expected_set - current_set
+
+        for name, controller in self.controllers.items():
+            if name not in ctrl_filter:
+                continue
+            current = controller.active_resources()
+            expected = controller.expected_resources()
+            for kind_ns, current_set in current.items():
+                if not res_filter or kind_ns.kind.lower() in res_filter:
+                    expected_set = expected[kind_ns]
+                    correct |= current_set & expected_set
+                    extra |= current_set - expected_set
+                    missing |= expected_set - current_set
 
         result = {
             "correct": "\n".join(sorted(str(_) for _ in correct)),
@@ -119,7 +142,9 @@ class VsphereCloudProviderCharm(CharmBase):
     def _scrub_resources(self, event):
         _, extra, __ = self._list_resources(event)
         if extra:
-            self.manifests.delete_resources(*extra)
+            # either controller may be used to delete resources
+            # Let's just use one of them.
+            self.controllers["provider"].delete_resources(*extra)
             self._list_resources(event)
 
     def _update_status(self, _):
@@ -127,15 +152,23 @@ class VsphereCloudProviderCharm(CharmBase):
             return
 
         unready = []
-        for resource in self.manifests.status():
-            for cond in resource.status.conditions:
-                if cond.status != "True":
-                    unready.append(f"{resource} not {cond.type}")
+        for controller in self.controllers.values():
+            for obj in controller.status():
+                for cond in obj.resource.status.conditions:
+                    if cond.status != "True":
+                        unready.append(f"{obj} not {cond.type}")
         if unready:
             self.unit.status = WaitingStatus(", ".join(sorted(unready)))
         else:
             self.unit.status = ActiveStatus("Ready")
-            self.unit.set_workload_version(self.manifests.current_release)
+
+            ver = ",".join(c.current_release for c in self.controllers.values())
+            self.unit.set_workload_version(ver)
+
+            versions = ", ".join(
+                f"{app}={c.current_release}" for app, c in self.controllers.items()
+            )
+            self.app.status = ActiveStatus(f"Versions: {versions}")
 
     @property
     def control_plane_relation(self) -> Optional[Relation]:
@@ -211,12 +244,14 @@ class VsphereCloudProviderCharm(CharmBase):
             return
 
         self.unit.status = MaintenanceStatus("Evaluating Manifests")
-        evaluation = self.manifests.evaluate()
-        if evaluation:
-            self.unit.status = BlockedStatus(evaluation)
-            return
+        new_hash = 0
+        for controller in self.controllers.values():
+            evaluation = controller.evaluate()
+            if evaluation:
+                self.unit.status = BlockedStatus(evaluation)
+                return
+            new_hash += controller.hash()
 
-        new_hash = self.manifests.hash()
         if new_hash == self.stored.config_hash:
             return
 
@@ -229,13 +264,15 @@ class VsphereCloudProviderCharm(CharmBase):
             return
         self.unit.status = MaintenanceStatus("Deploying vSphere Cloud Provider")
         self.unit.set_workload_version("")
-        self.manifests.apply_manifests()
+        for controller in self.controllers.values():
+            controller.apply_manifests()
         self.stored.deployed = True
 
     def _cleanup(self, _event):
         if self.stored.config_hash:
             self.unit.status = MaintenanceStatus("Cleaning up vSphere Cloud Provider")
-            self.manifests.delete_manifests(ignore_unauthorized=True)
+            for controller in self.controllers.values():
+                controller.delete_manifests(ignore_unauthorized=True)
         self.unit.status = MaintenanceStatus("Shutting down")
 
 

@@ -1,8 +1,13 @@
 list-versions:
-  description: List Cloud Provider Versions supported by this charm
+  description: List Cloud Provider and Storage Versions supported by this charm
 list-resources:
-  description: List Cloud Provider Resources
+  description: List Cloud Provider and Storage Resources of configured version
   params:
+    controller:
+      type: string
+      default: ""
+      description: |
+        Filter list based on "provider" or "storage" manifests.
     resources:
       type: string
       default: ""
@@ -11,6 +16,11 @@ list-resources:
 scrub-resources:
   description: Remove deployments other than the current one
   params:
+    controller:
+      type: string
+      default: ""
+      description: |
+        Filter list based on "provider" or "storage" manifests.
     resources:
       type: string
       default: ""

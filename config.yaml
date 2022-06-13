@@ -47,20 +47,38 @@ options:
 
         juju config kubernetes-metrics-server --reset image-registry
 
-  release:
+  provider-release:
     type: string
     description: |
       Specify the version of cloud-provider as defined by the `releases`
       directory of https://github.com/kubernetes/cloud-provider-vsphere/
 
       example)
-        juju config vsphere-cloud-provider release='v1.22'
+        juju config vsphere-cloud-provider provider-release='v1.22'
       
       A list of supported versions is available through the action:
         juju run-action vsphere-cloud-provider/0 list-releases --wait
       
       To reset by to the latest supported by the charm use:
-        juju config vsphere-cloud-provider --reset release
+        juju config vsphere-cloud-provider --reset provider-release
+      
+      The current release deployed is available by viewing
+        juju status vsphere-cloud-provider
+
+  storage-release:
+    type: string
+    description: |
+      Specify the version of storage-provider as defined by the `release`
+      tags of https://github.com/kubernetes-sigs/vsphere-csi-driver
+
+      example)
+        juju config vsphere-cloud-provider storage-release='v2.5.1'
+      
+      A list of supported versions is available through the action:
+        juju run-action vsphere-cloud-provider/0 list-releases --wait
+      
+      To reset by to the latest supported by the charm use:
+        juju config vsphere-cloud-provider --reset storage-release
       
       The current release deployed is available by viewing
         juju status vsphere-cloud-provider

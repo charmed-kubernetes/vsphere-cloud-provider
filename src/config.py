@@ -44,6 +44,7 @@ class CharmConfig:
             self.control_node_selector
         except ValueError:
             return "Config control-node-selector is invalid."
+        return None
 
     @property
     def available_data(self):
