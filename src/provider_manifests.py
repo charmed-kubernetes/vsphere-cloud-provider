@@ -7,8 +7,7 @@ from hashlib import md5
 from typing import Dict, Optional
 
 import yaml
-
-from manifests import CharmLabel, ConfigRegistry, Manifests, Patch
+from ops.manifests import ConfigRegistry, ManifestLabel, Manifests, Patch
 
 log = logging.getLogger(__file__)
 SECRET_NAME = "vsphere-cloud-secret"
@@ -79,15 +78,15 @@ class ApplyControlNodeSelector(Patch):
 class VsphereProviderManifests(Manifests):
     """Deployment Specific details for the vsphere-cloud-provider."""
 
-    def __init__(self, charm_name, charm_config, integrator, control_plane, kube_control):
+    def __init__(self, charm_config, integrator, control_plane, kube_control):
         manipulations = [
-            CharmLabel(self),
+            ManifestLabel(self),
             ConfigRegistry(self),
             ApplySecrets(self),
             ApplyConfigMap(self),
             ApplyControlNodeSelector(self),
         ]
-        super().__init__(charm_name, "upstream/cloud_provider", manipulations=manipulations)
+        super().__init__("provider", "upstream/cloud_provider", manipulations=manipulations)
         self.charm_config = charm_config
         self.integrator = integrator
         self.control_plane = control_plane
