@@ -78,7 +78,7 @@ class ApplyControlNodeSelector(Patch):
 class VsphereProviderManifests(Manifests):
     """Deployment Specific details for the vsphere-cloud-provider."""
 
-    def __init__(self, charm_config, integrator, control_plane, kube_control):
+    def __init__(self, app_name, charm_config, integrator, control_plane, kube_control):
         manipulations = [
             ManifestLabel(self),
             ConfigRegistry(self),
@@ -86,7 +86,9 @@ class VsphereProviderManifests(Manifests):
             ApplyConfigMap(self),
             ApplyControlNodeSelector(self),
         ]
-        super().__init__("provider", "upstream/cloud_provider", manipulations=manipulations)
+        super().__init__(
+            "cloud-provider-vsphere", app_name, "upstream/cloud_provider", manipulations
+        )
         self.charm_config = charm_config
         self.integrator = integrator
         self.control_plane = control_plane

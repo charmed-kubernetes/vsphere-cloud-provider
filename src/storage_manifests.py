@@ -121,6 +121,7 @@ class VsphereStorageManifests(Manifests):
 
     def __init__(
         self,
+        app_name,
         charm_config,
         integrator,
         control_plane: Relation,
@@ -128,7 +129,7 @@ class VsphereStorageManifests(Manifests):
         model_uuid: str,
     ):
         manipulations = [
-            CreateNamespace(self),
+            CreateNamespace(self, "vmware-system-csi"),
             CreateSecret(self),
             ManifestLabel(self),
             ConfigRegistry(self),
@@ -136,10 +137,10 @@ class VsphereStorageManifests(Manifests):
             CreateStorageClass(self, "default"),  # creates csi-vsphere-default
         ]
         super().__init__(
-            "storage",
+            "vsphere-csi-driver",
+            app_name,
             "upstream/cloud_storage",
-            manipulations=manipulations,
-            default_namespace="vmware-system-csi",
+            manipulations,
         )
         self.charm_config = charm_config
         self.integrator = integrator

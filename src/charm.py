@@ -53,12 +53,14 @@ class VsphereCloudProviderCharm(CharmBase):
         )
         self.collector = Collector(
             VsphereProviderManifests(
+                self.app.name,
                 self.charm_config,
                 self.integrator,
                 self.control_plane_relation,
                 self.kube_control,
             ),
             VsphereStorageManifests(
+                self.app.name,
                 self.charm_config,
                 self.integrator,
                 self.control_plane_relation,
