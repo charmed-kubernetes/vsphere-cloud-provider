@@ -121,7 +121,7 @@ class VsphereStorageManifests(Manifests):
 
     def __init__(
         self,
-        app_name,
+        charm,
         charm_config,
         integrator,
         control_plane: Relation,
@@ -138,7 +138,7 @@ class VsphereStorageManifests(Manifests):
         ]
         super().__init__(
             "vsphere-csi-driver",
-            app_name,
+            charm.model,
             "upstream/cloud_storage",
             manipulations,
         )
