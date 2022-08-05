@@ -8,16 +8,15 @@ from hashlib import md5
 from typing import Dict, Optional
 
 from lightkube.codecs import AnyResource, from_dict
-from ops.model import Relation
-
-from manifests import (
+from ops.manifests import (
     Addition,
-    CharmLabel,
     ConfigRegistry,
     CreateNamespace,
+    ManifestLabel,
     Manifests,
     Patch,
 )
+from ops.model import Relation
 
 log = logging.getLogger(__file__)
 SECRET_NAME = "vsphere-config-secret"
@@ -122,7 +121,7 @@ class VsphereStorageManifests(Manifests):
 
     def __init__(
         self,
-        charm_name: str,
+        charm,
         charm_config,
         integrator,
         control_plane: Relation,
@@ -130,18 +129,18 @@ class VsphereStorageManifests(Manifests):
         model_uuid: str,
     ):
         manipulations = [
-            CreateNamespace(self),
+            CreateNamespace(self, "vmware-system-csi"),
             CreateSecret(self),
-            CharmLabel(self),
+            ManifestLabel(self),
             ConfigRegistry(self),
             UpdateDeployment(self),
             CreateStorageClass(self, "default"),  # creates csi-vsphere-default
         ]
         super().__init__(
-            charm_name,
+            "vsphere-csi-driver",
+            charm.model,
             "upstream/cloud_storage",
-            manipulations=manipulations,
-            default_namespace="vmware-system-csi",
+            manipulations,
         )
         self.charm_config = charm_config
         self.integrator = integrator

@@ -142,55 +142,56 @@ def test_waits_for_kube_control(mock_create_kubeconfig, harness):
 @pytest.mark.usefixtures("integrator", "certificates", "kube_control", "control_plane")
 def test_waits_for_config(harness: Harness, lk_client, caplog):
     harness.begin_with_initial_hooks()
+    with mock.patch.object(lk_client, "list") as mock_list:
+        mock_list.return_value = [mock.Mock(**{"metadata.annotations": {}})]
+        caplog.clear()
+        harness.update_config(
+            {
+                "server": "vsphere.local",
+                "username": "alice",
+                "password": "s3cr3t",
+                "datacenter": "dc1",
+                "control-node-selector": 'gcp.io/my-control-node=""',
+            }
+        )
 
-    lk_client().list.return_value = [mock.Mock(**{"metadata.annotations": {}})]
-    caplog.clear()
-    harness.update_config(
-        {
-            "server": "vsphere.local",
-            "username": "alice",
-            "password": "s3cr3t",
-            "datacenter": "dc1",
-            "control-node-selector": 'gcp.io/my-control-node=""',
+        provider_messages = {r.message for r in caplog.records if "provider" in r.filename}
+        storage_messages = {r.message for r in caplog.records if "storage" in r.filename}
+
+        assert provider_messages == {
+            "Applying provider secret data for server vsphere.local",
+            "Applying provider ConfigMap Data for vcenter dc1",
+            'Applying provider Control Node Selector as gcp.io/my-control-node: ""',
         }
-    )
-    provider_messages = [r.message for r in caplog.records if "provider" in r.filename]
-    storage_messages = [r.message for r in caplog.records if "storage" in r.filename]
-
-    assert provider_messages == [
-        "Applying provider secret data for server vsphere.local",
-        "Applying provider ConfigMap Data for vcenter dc1",
-        'Applying provider Control Node Selector as gcp.io/my-control-node: ""',
-    ]
-    assert storage_messages == [
-        "Creating storage secret data for server vsphere.local",
-        "Creating storage class csi-vsphere-default",
-        'Applying storage Control Node Selector as gcp.io/my-control-node: ""',
-        "Setting storage deployment replicas to 2",
-    ]
-
-    caplog.clear()
-    harness.update_config(
-        {
-            "server": "",
-            "username": "",
-            "password": "",
-            "datacenter": "",
-            "control-node-selector": "",
-            "image-registry": "dockerhub.io",
+        assert storage_messages == {
+            "Creating storage secret data for server vsphere.local",
+            "Creating storage class csi-vsphere-default",
+            'Applying storage Control Node Selector as gcp.io/my-control-node: ""',
+            "Setting storage deployment replicas to 2",
         }
-    )
-    provider_messages = [r.message for r in caplog.records if "provider" in r.filename]
-    storage_messages = [r.message for r in caplog.records if "storage" in r.filename]
 
-    assert provider_messages == [
-        "Applying provider secret data for server 1.2.3.4",
-        "Applying provider ConfigMap Data for vcenter Elbonia",
-        'Applying provider Control Node Selector as juju-application: "kubernetes-control-plane"',
-    ]
-    assert storage_messages == [
-        "Creating storage secret data for server 1.2.3.4",
-        "Creating storage class csi-vsphere-default",
-        'Applying storage Control Node Selector as juju-application: "kubernetes-control-plane"',
-        "Setting storage deployment replicas to 2",
-    ]
+        caplog.clear()
+        harness.update_config(
+            {
+                "server": "",
+                "username": "",
+                "password": "",
+                "datacenter": "",
+                "control-node-selector": "",
+                "image-registry": "dockerhub.io",
+            }
+        )
+        provider_messages = {r.message for r in caplog.records if "provider" in r.filename}
+        storage_messages = {r.message for r in caplog.records if "storage" in r.filename}
+
+        assert provider_messages == {
+            "Applying provider secret data for server 1.2.3.4",
+            "Applying provider ConfigMap Data for vcenter Elbonia",
+            'Applying provider Control Node Selector as juju-application: "kubernetes-control-plane"',
+        }
+        assert storage_messages == {
+            "Creating storage secret data for server 1.2.3.4",
+            "Creating storage class csi-vsphere-default",
+            'Applying storage Control Node Selector as juju-application: "kubernetes-control-plane"',
+            "Setting storage deployment replicas to 2",
+        }

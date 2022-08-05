@@ -3,10 +3,7 @@
 """Config Management for the vSphere cloud-provider charm."""
 
 import logging
-from pathlib import Path
 from typing import Mapping, Optional
-
-import yaml
 
 log = logging.getLogger(__name__)
 
@@ -49,13 +46,10 @@ class CharmConfig:
     @property
     def available_data(self):
         """Parse valid charm config into a dict, drop keys if unset."""
-        charm_config = yaml.safe_load(Path("config.yaml").read_text())
         data = {}
-        for key in charm_config["options"]:
+        for key, value in self.charm.config.items():
             if key == "control-node-selector":
                 value = self.safe_control_node_selector
-            else:
-                value = self.charm.config.get(key)
             data[key] = value
 
         for key, value in dict(**data).items():
