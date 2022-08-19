@@ -9,6 +9,7 @@ from typing import Optional
 
 from ops.charm import CharmBase
 from ops.framework import StoredState
+from ops.interface_kube_control import KubeControlRequirer
 from ops.main import main
 from ops.manifests import Collector
 from ops.model import (
@@ -22,7 +23,6 @@ from ops.model import (
 from config import CharmConfig
 from provider_manifests import VsphereProviderManifests
 from requires_certificates import CertificatesRequires
-from requires_kube_control import KubeControlRequires
 from requires_vsphere_integration import VsphereIntegrationRequires
 from storage_manifests import VsphereStorageManifests
 
@@ -41,7 +41,7 @@ class VsphereCloudProviderCharm(CharmBase):
 
         # Relation Validator and datastore
         self.integrator = VsphereIntegrationRequires(self)
-        self.kube_control = KubeControlRequires(self)
+        self.kube_control = KubeControlRequirer(self)
         self.certificates = CertificatesRequires(self)
         # Config Validator and datastore
         self.charm_config = CharmConfig(self)
@@ -56,14 +56,12 @@ class VsphereCloudProviderCharm(CharmBase):
                 self,
                 self.charm_config,
                 self.integrator,
-                self.control_plane_relation,
                 self.kube_control,
             ),
             VsphereStorageManifests(
                 self,
                 self.charm_config,
                 self.integrator,
-                self.control_plane_relation,
                 self.kube_control,
                 self.model.uuid,
             ),
@@ -119,11 +117,6 @@ class VsphereCloudProviderCharm(CharmBase):
             self.unit.status = ActiveStatus("Ready")
             self.unit.set_workload_version(self.collector.short_version)
             self.app.status = ActiveStatus(self.collector.long_version)
-
-    @property
-    def control_plane_relation(self) -> Optional[Relation]:
-        """Find a control-plane-node external-cloud-provider relation."""
-        return self.model.get_relation("external-cloud-provider")
 
     def _kube_control(self, event=None):
         self.kube_control.set_auth_request(self.unit.name)

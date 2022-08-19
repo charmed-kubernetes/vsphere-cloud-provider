@@ -78,7 +78,7 @@ class ApplyControlNodeSelector(Patch):
 class VsphereProviderManifests(Manifests):
     """Deployment Specific details for the vsphere-cloud-provider."""
 
-    def __init__(self, charm, charm_config, integrator, control_plane, kube_control):
+    def __init__(self, charm, charm_config, integrator, kube_control):
         manipulations = [
             ManifestLabel(self),
             ConfigRegistry(self),
@@ -91,7 +91,6 @@ class VsphereProviderManifests(Manifests):
         )
         self.charm_config = charm_config
         self.integrator = integrator
-        self.control_plane = control_plane
         self.kube_control = kube_control
 
     @property
@@ -108,10 +107,10 @@ class VsphereProviderManifests(Manifests):
                 }
             )
         if self.kube_control.is_ready:
-            config["image-registry"] = self.kube_control.registry_location
+            config["image-registry"] = self.kube_control.get_registry_location()
+            taints = self.kube_control.get_controller_taints()
 
-        if self.control_plane:
-            config["control-node-selector"] = {"juju-application": self.control_plane.app.name}
+            config["control-node-selector"] = {"juju-application": self.kube_control.relation.name}
 
         config.update(**self.charm_config.available_data)
 

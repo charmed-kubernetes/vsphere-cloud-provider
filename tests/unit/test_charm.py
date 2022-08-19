@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from ops.model import BlockedStatus, WaitingStatus
+from ops.model import BlockedStatus, WaitingStatus, MaintenanceStatus
 from ops.testing import Harness
 
 from charm import VsphereCloudProviderCharm
@@ -28,13 +28,6 @@ def mock_ca_cert(tmpdir):
     ca_cert = Path(tmpdir) / "ca.crt"
     with mock.patch.object(VsphereCloudProviderCharm, "CA_CERT_PATH", ca_cert):
         yield ca_cert
-
-
-@pytest.fixture()
-def control_plane(harness: Harness):
-    rel_id = harness.add_relation("external-cloud-provider", "kubernetes-control-plane")
-    harness.add_relation_unit(rel_id, "kubernetes-control-plane/0")
-    harness.add_relation_unit(rel_id, "kubernetes-control-plane/1")
 
 
 @pytest.fixture()
@@ -60,10 +53,12 @@ def certificates():
 
 @pytest.fixture()
 def kube_control():
-    with mock.patch("charm.KubeControlRequires") as mocked:
+    with mock.patch("charm.KubeControlRequirer") as mocked:
         kube_control = mocked.return_value
         kube_control.evaluate_relation.return_value = None
-        kube_control.registry_location = "rocks.canonical.com/cdk"
+        kube_control.get_registry_location.return_value = "rocks.canonical.com/cdk"
+        kube_control.relation.name = "kubernetes-control-plane"
+        kube_control.relation.units = [f"kubernetes-control-plane/{_}" for _ in range(2)]
         yield kube_control
 
 
@@ -100,7 +95,7 @@ def test_waits_for_certificates(harness):
     assert charm.unit.status.message == "Missing required kube-control relation"
 
 
-@mock.patch("requires_kube_control.KubeControlRequires.create_kubeconfig")
+@mock.patch("ops.interface_kube_control.KubeControlRequirer.create_kubeconfig")
 @pytest.mark.usefixtures("integrator", "certificates")
 def test_waits_for_kube_control(mock_create_kubeconfig, harness):
     harness.begin_with_initial_hooks()
@@ -132,14 +127,14 @@ def test_waits_for_kube_control(mock_create_kubeconfig, harness):
             mock.call(charm.CA_CERT_PATH, "/home/ubuntu/.kube/config", "ubuntu", charm.unit.name),
         ]
     )
-    assert isinstance(charm.unit.status, BlockedStatus)
+    assert isinstance(charm.unit.status, MaintenanceStatus)
     assert (
         charm.unit.status.message
-        == "Provider manifests waiting for definition of control-node-selector"
+        == "Deploying vSphere Cloud Provider"
     )
 
 
-@pytest.mark.usefixtures("integrator", "certificates", "kube_control", "control_plane")
+@pytest.mark.usefixtures("integrator", "certificates", "kube_control")
 def test_waits_for_config(harness: Harness, lk_client, caplog):
     harness.begin_with_initial_hooks()
     with mock.patch.object(lk_client, "list") as mock_list:

@@ -1,11 +1,13 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
+import asyncio
 import logging
 import shlex
 from pathlib import Path
 
 import pytest
 from lightkube.resources.core_v1 import Node
+from lightkube.codecs import from_dict
 
 log = logging.getLogger(__name__)
 
@@ -43,3 +45,66 @@ async def test_build_and_deploy(ops_test):
 async def test_provider_ids(kubernetes):
     nodes = kubernetes.list(Node)
     assert all(node.spec.providerID.startswith("vsphere://") for node in nodes)
+
+
+@pytest.fixture
+async def pod_with_volume(kubernetes, ops_test):
+    name = ops_test.model_name
+    pvc = from_dict(
+        dict(
+            kind="PersistentVolumeClaim",
+            apiVersion="v1",
+            metadata=dict(name=name, labels=dict(claim_pvc="pvc")),
+            spec=dict(
+                accessModes=["ReadWriteOnce"],
+                resources=dict(requests=dict(storage="10Mi")),
+                storageClassName="csi-vsphere-default",
+            ),
+        )
+    )
+    busybox = from_dict(
+        dict(
+            kind="Pod",
+            apiVersion="v1",
+            metadata=dict(name=name, labels=dict(claim_pvc="pod")),
+            spec=dict(
+                containers=[
+                    dict(
+                        image="busybox",
+                        command=["sleep", "3600"],
+                        imagePullPolicy="IfNotPresent",
+                        name="busybox",
+                        volumeMounts=[dict(mountPath="/pv", name="testvolume")],
+                    )
+                ],
+                restartPolicy="Always",
+                volumes=[dict(name="testvolume", persistentVolumeClaim=dict(claimName=name))],
+            ),
+        )
+    )
+    await asyncio.gather(
+        *[
+            kubernetes.create(rsc, namespace=rsc.metadata.namespace)
+            for rsc in [pvc, busybox]
+        ]
+    )
+    yield busybox
+    await asyncio.gather(
+        *[
+            kubernetes.delete(type(rsc), name=name, namespace=rsc.metadata.namespace)
+            for rsc in [pvc, busybox]
+        ]
+    )
+
+
+async def test_create_persistent_volume(kubernetes, pod_with_volume):
+    _fix = pod_with_volume
+    res, name, namespace = type(_fix), _fix.metadata.name, _fix.metadata.namespace
+    try:
+        pod = await asyncio.wait_for(
+            kubernetes.wait(res, name, namespace=namespace, for_conditions=["ContainersReady"]),
+            timeout=30.0,
+        )
+    except asyncio.TimeoutError as e:
+        raise AssertionError("Timeout waiting for pod to be ready") from e
+    assert pod.status.phase == "Running"

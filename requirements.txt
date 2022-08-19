@@ -4,3 +4,4 @@ lightkube>=0.10.1,<1.0.0
 jsonschema
 pyyaml
 git+https://github.com/canonical/ops-lib-manifest.git@main
+git+https://github.com/charmed-kubernetes/interface-kube-control.git@ops-package/requires#subdirectory=ops

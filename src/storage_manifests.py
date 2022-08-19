@@ -19,6 +19,7 @@ from ops.manifests import (
 from ops.model import Relation
 
 log = logging.getLogger(__file__)
+NAMESPACE = "vmware-system-csi"
 SECRET_NAME = "vsphere-config-secret"
 SECRET_DATA = "csi-vsphere.conf"
 STORAGE_CLASS_NAME = "csi-vsphere-{type}"
@@ -61,6 +62,7 @@ class CreateSecret(Addition):
                 kind="Secret",
                 type="Opaque",
                 metadata=dict(name=SECRET_NAME),
+                namespace=NAMESPACE,
                 data=dict(),
             )
         )
@@ -124,12 +126,11 @@ class VsphereStorageManifests(Manifests):
         charm,
         charm_config,
         integrator,
-        control_plane: Relation,
         kube_control,
         model_uuid: str,
     ):
         manipulations = [
-            CreateNamespace(self, "vmware-system-csi"),
+            CreateNamespace(self, NAMESPACE),
             CreateSecret(self),
             ManifestLabel(self),
             ConfigRegistry(self),
@@ -144,7 +145,6 @@ class VsphereStorageManifests(Manifests):
         )
         self.charm_config = charm_config
         self.integrator = integrator
-        self.control_plane = control_plane
         self.kube_control = kube_control
         self.model_uuid = model_uuid
 
@@ -157,12 +157,13 @@ class VsphereStorageManifests(Manifests):
             config["username"] = self.integrator.user
             config["password"] = self.integrator.password
             config["datacenter"] = self.integrator.datacenter
-        if self.kube_control.is_ready:
-            config["image-registry"] = self.kube_control.registry_location
 
-        if self.control_plane:
-            config["control-node-selector"] = {"juju-application": self.control_plane.app.name}
-            config["replicas"] = len(self.control_plane.units)
+        if self.kube_control.is_ready:
+            config["image-registry"] = self.kube_control.get_registry_location()
+            taints = self.kube_control.get_controller_taints()
+
+            config["control-node-selector"] = {"juju-application": self.kube_control.relation.name}
+            config["replicas"] = len(self.kube_control.relation.units)
 
         config.update(**self.charm_config.available_data)
 
