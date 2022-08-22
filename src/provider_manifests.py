@@ -1,12 +1,13 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 """Implementation of vsphere specific details of the kubernetes manifests."""
-import json
 import logging
+import pickle
 from hashlib import md5
 from typing import Dict, Optional
 
 import yaml
+from lightkube.models.core_v1 import Toleration
 from ops.manifests import ConfigRegistry, ManifestLabel, Manifests, Patch
 
 log = logging.getLogger(__file__)
@@ -55,8 +56,8 @@ class ApplyConfigMap(Patch):
         obj.data["vsphere.conf"] = yaml.safe_dump(vsphere_conf)
 
 
-class ApplyControlNodeSelector(Patch):
-    """Update the Deployment object to reference juju supplied node selector."""
+class UpdateControllerDaemonSet(Patch):
+    """Update the Controller DaemonSet object to target juju control plane."""
 
     def __call__(self, obj):
         """Update the DaemonSet object in the deployment."""
@@ -74,6 +75,16 @@ class ApplyControlNodeSelector(Patch):
         node_selector_text = " ".join('{0}: "{1}"'.format(*t) for t in node_selector.items())
         log.info(f"Applying provider Control Node Selector as {node_selector_text}")
 
+        obj.spec.template.spec.tolerations += [
+            Toleration(
+                key=taint.key,
+                value=taint.value,
+                effect=taint.effect,                
+            )
+            for taint in self.manifests.config.get("control-node-taints")
+        ]
+        log.info("Adding provider tolerations from control-plane")
+
 
 class VsphereProviderManifests(Manifests):
     """Deployment Specific details for the vsphere-cloud-provider."""
@@ -84,7 +95,7 @@ class VsphereProviderManifests(Manifests):
             ConfigRegistry(self),
             ApplySecrets(self),
             ApplyConfigMap(self),
-            ApplyControlNodeSelector(self),
+            UpdateControllerDaemonSet(self),
         ]
         super().__init__(
             "cloud-provider-vsphere", charm.model, "upstream/cloud_provider", manipulations
@@ -108,9 +119,10 @@ class VsphereProviderManifests(Manifests):
             )
         if self.kube_control.is_ready:
             config["image-registry"] = self.kube_control.get_registry_location()
-            taints = self.kube_control.get_controller_taints()
-
-            config["control-node-selector"] = {"juju-application": self.kube_control.relation.name}
+            config["control-node-taints"] = self.kube_control.get_controller_taints()
+            config["control-node-selector"] = self.kube_control.get_controller_labels() or {
+                "juju-application": self.kube_control.relation.name
+            }
 
         config.update(**self.charm_config.available_data)
 
@@ -124,7 +136,7 @@ class VsphereProviderManifests(Manifests):
 
     def hash(self) -> int:
         """Calculate a hash of the current configuration."""
-        return int(md5(json.dumps(self.config, sort_keys=True).encode("utf8")).hexdigest(), 16)
+        return int(md5(pickle.dumps(self.config)).hexdigest(), 16)
 
     def evaluate(self) -> Optional[str]:
         """Determine if manifest_config can be applied to manifests."""

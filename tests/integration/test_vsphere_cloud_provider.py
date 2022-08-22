@@ -6,8 +6,8 @@ import shlex
 from pathlib import Path
 
 import pytest
-from lightkube.resources.core_v1 import Node
 from lightkube.codecs import from_dict
+from lightkube.resources.core_v1 import Node
 
 log = logging.getLogger(__name__)
 
@@ -83,10 +83,7 @@ async def pod_with_volume(kubernetes, ops_test):
         )
     )
     await asyncio.gather(
-        *[
-            kubernetes.create(rsc, namespace=rsc.metadata.namespace)
-            for rsc in [pvc, busybox]
-        ]
+        *[kubernetes.create(rsc, namespace=rsc.metadata.namespace) for rsc in [pvc, busybox]]
     )
     yield busybox
     await asyncio.gather(

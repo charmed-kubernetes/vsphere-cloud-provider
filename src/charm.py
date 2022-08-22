@@ -5,20 +5,13 @@
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.interface_kube_control import KubeControlRequirer
 from ops.main import main
 from ops.manifests import Collector
-from ops.model import (
-    ActiveStatus,
-    BlockedStatus,
-    MaintenanceStatus,
-    Relation,
-    WaitingStatus,
-)
+from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
 
 from config import CharmConfig
 from provider_manifests import VsphereProviderManifests

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from ops.model import BlockedStatus, WaitingStatus, MaintenanceStatus
+from ops.model import BlockedStatus, MaintenanceStatus, WaitingStatus
 from ops.testing import Harness
 
 from charm import VsphereCloudProviderCharm
@@ -57,6 +57,8 @@ def kube_control():
         kube_control = mocked.return_value
         kube_control.evaluate_relation.return_value = None
         kube_control.get_registry_location.return_value = "rocks.canonical.com/cdk"
+        kube_control.get_controller_taints.return_value = []
+        kube_control.get_controller_labels.return_value = []
         kube_control.relation.name = "kubernetes-control-plane"
         kube_control.relation.units = [f"kubernetes-control-plane/{_}" for _ in range(2)]
         yield kube_control
@@ -128,10 +130,7 @@ def test_waits_for_kube_control(mock_create_kubeconfig, harness):
         ]
     )
     assert isinstance(charm.unit.status, MaintenanceStatus)
-    assert (
-        charm.unit.status.message
-        == "Deploying vSphere Cloud Provider"
-    )
+    assert charm.unit.status.message == "Deploying vSphere Cloud Provider"
 
 
 @pytest.mark.usefixtures("integrator", "certificates", "kube_control")
@@ -154,6 +153,7 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
         storage_messages = {r.message for r in caplog.records if "storage" in r.filename}
 
         assert provider_messages == {
+            "Adding provider tolerations from control-plane",
             "Applying provider secret data for server vsphere.local",
             "Applying provider ConfigMap Data for vcenter dc1",
             'Applying provider Control Node Selector as gcp.io/my-control-node: ""',
@@ -162,6 +162,7 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
             "Creating storage secret data for server vsphere.local",
             "Creating storage class csi-vsphere-default",
             'Applying storage Control Node Selector as gcp.io/my-control-node: ""',
+            "Adding storage tolerations from control-plane",
             "Setting storage deployment replicas to 2",
         }
 
@@ -180,6 +181,7 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
         storage_messages = {r.message for r in caplog.records if "storage" in r.filename}
 
         assert provider_messages == {
+            "Adding provider tolerations from control-plane",
             "Applying provider secret data for server 1.2.3.4",
             "Applying provider ConfigMap Data for vcenter Elbonia",
             'Applying provider Control Node Selector as juju-application: "kubernetes-control-plane"',
@@ -189,4 +191,5 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
             "Creating storage class csi-vsphere-default",
             'Applying storage Control Node Selector as juju-application: "kubernetes-control-plane"',
             "Setting storage deployment replicas to 2",
+            "Adding storage tolerations from control-plane",
         }
