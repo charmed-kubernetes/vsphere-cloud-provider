@@ -75,14 +75,17 @@ class UpdateControllerDaemonSet(Patch):
         node_selector_text = " ".join('{0}: "{1}"'.format(*t) for t in node_selector.items())
         log.info(f"Applying provider Control Node Selector as {node_selector_text}")
 
-        obj.spec.template.spec.tolerations += [
+        current_keys = {toleration.key for toleration in obj.spec.template.spec.tolerations}
+        missing_tolerations = [
             Toleration(
                 key=taint.key,
                 value=taint.value,
-                effect=taint.effect,                
+                effect=taint.effect,
             )
             for taint in self.manifests.config.get("control-node-taints")
+            if taint.key not in current_keys
         ]
+        obj.spec.template.spec.tolerations += missing_tolerations
         log.info("Adding provider tolerations from control-plane")
 
 

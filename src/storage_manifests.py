@@ -54,7 +54,7 @@ class UpdateStorageDeployment(Patch):
             Toleration(
                 key=taint.key,
                 value=taint.value,
-                effect=taint.effect,                
+                effect=taint.effect,
             )
             for taint in self.manifests.config.get("control-node-taints")
         ]

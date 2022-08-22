@@ -2,7 +2,8 @@ description: Overlay for attaching current charm
 applications:
   kubernetes-control-plane:
     options:
-      register-with-taints: ""  # requires kubelet on control-plane
+      register-with-taints: "node-role.kubernetes.io/control-plane:NoSchedule"
+      labels: "node-role.kubernetes.io/control-plane="
       allow-privileged: 'true'  # csi daemonset requires allow-privileged
   vsphere-integrator:
     charm: vsphere-integrator
