@@ -123,9 +123,9 @@ class VsphereProviderManifests(Manifests):
         if self.kube_control.is_ready:
             config["image-registry"] = self.kube_control.get_registry_location()
             config["control-node-taints"] = self.kube_control.get_controller_taints()
-            config["control-node-selector"] = self.kube_control.get_controller_labels() or {
-                "juju-application": self.kube_control.relation.name
-            }
+            config["control-node-selector"] = {
+                label.key: label.value for label in self.kube_control.get_controller_labels()
+            } or {"juju-application": self.kube_control.relation.name}
 
         config.update(**self.charm_config.available_data)
 
