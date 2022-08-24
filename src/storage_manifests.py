@@ -71,8 +71,7 @@ class CreateSecret(Addition):
                 apiVersion="v1",
                 kind="Secret",
                 type="Opaque",
-                metadata=dict(name=SECRET_NAME),
-                namespace=NAMESPACE,
+                metadata=dict(name=SECRET_NAME, namespace=NAMESPACE),
                 data=dict(),
             )
         )
@@ -170,10 +169,12 @@ class VsphereStorageManifests(Manifests):
 
         if self.kube_control.is_ready:
             config["image-registry"] = self.kube_control.get_registry_location()
-            config["control-node-taints"] = self.kube_control.get_controller_taints()
+            config["control-node-taints"] = self.kube_control.get_controller_taints() or [
+                Toleration("NoSchedule", "node-role.kubernetes.io/control-plane")
+            ]  # by default
             config["control-node-selector"] = {
                 label.key: label.value for label in self.kube_control.get_controller_labels()
-            } or {"juju-application": self.kube_control.relation.name}
+            } or {"juju-application": self.kube_control.relation.app.name}
             config["replicas"] = len(self.kube_control.relation.units)
 
         config.update(**self.charm_config.available_data)

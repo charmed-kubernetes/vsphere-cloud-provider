@@ -59,7 +59,7 @@ def kube_control():
         kube_control.get_registry_location.return_value = "rocks.canonical.com/cdk"
         kube_control.get_controller_taints.return_value = []
         kube_control.get_controller_labels.return_value = []
-        kube_control.relation.name = "kubernetes-control-plane"
+        kube_control.relation.app.name = "kubernetes-control-plane"
         kube_control.relation.units = [f"kubernetes-control-plane/{_}" for _ in range(2)]
         yield kube_control
 
@@ -145,7 +145,7 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
                 "username": "alice",
                 "password": "s3cr3t",
                 "datacenter": "dc1",
-                "control-node-selector": 'gcp.io/my-control-node=""',
+                "control-node-selector": "gcp.io/my-control-node=",
             }
         )
 
