@@ -43,8 +43,8 @@ async def test_build_and_deploy(ops_test):
 
 
 async def test_provider_ids(kubernetes):
-    nodes = kubernetes.list(Node)
-    assert all(node.spec.providerID.startswith("vsphere://") for node in nodes)
+    async for node in kubernetes.list(Node):
+        assert node.spec.providerID.startswith("vsphere://")
 
 
 @pytest.fixture
