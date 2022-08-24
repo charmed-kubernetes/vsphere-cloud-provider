@@ -56,7 +56,7 @@ class UpdateStorageDeployment(Patch):
                 value=taint.value,
                 effect=taint.effect,
             )
-            for taint in self.manifests.config.get("control-node-taints")
+            for taint in self.manifests.config.get("control-node-taints", [])
         ]
         log.info("Adding storage tolerations from control-plane")
 
