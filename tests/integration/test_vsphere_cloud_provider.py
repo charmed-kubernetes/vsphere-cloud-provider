@@ -70,7 +70,7 @@ async def pod_with_volume(kubernetes, ops_test):
             spec=dict(
                 containers=[
                     dict(
-                        image="busybox",
+                        image="rocks.canonical.com:443/cdk/busybox:1.32",
                         command=["sleep", "3600"],
                         imagePullPolicy="IfNotPresent",
                         name="busybox",
