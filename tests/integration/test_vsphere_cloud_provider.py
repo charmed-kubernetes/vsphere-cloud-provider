@@ -100,7 +100,7 @@ async def test_create_persistent_volume(kubernetes, pod_with_volume):
     try:
         pod = await asyncio.wait_for(
             kubernetes.wait(res, name, namespace=namespace, for_conditions=["ContainersReady"]),
-            timeout=30.0,
+            timeout=90.0,
         )
     except asyncio.TimeoutError as e:
         raise AssertionError("Timeout waiting for pod to be ready") from e
