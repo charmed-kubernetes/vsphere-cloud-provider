@@ -25,11 +25,13 @@ options:
     description: |
       Specifies to which nodes this operator adds the vsphere-cpi daemonsets
       Declare node labels in key=value format, separated by spaces.
+      It's also valid to not have a value, this is interpretted as an empty string.
 
-      Required if not related to kubernetes-control-plane:external-cloud-provider
+      Required if not related to kubernetes-control-plane:kube-control
 
       e.g. 
-        node-role.kubernetes.io/control-plane=""
+        node-role.kubernetes.io/control-plane=custom-value
+        node-role.kubernetes.io/control-plane=
     type: string
 
   image-registry:

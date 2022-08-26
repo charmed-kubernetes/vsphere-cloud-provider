@@ -2,12 +2,13 @@
 # See LICENSE file for licensing details.
 """Implementation of vsphere specific details of the kubernetes manifests."""
 import base64
-import json
 import logging
+import pickle
 from hashlib import md5
 from typing import Dict, Optional
 
 from lightkube.codecs import AnyResource, from_dict
+from lightkube.models.core_v1 import Toleration
 from ops.manifests import (
     Addition,
     ConfigRegistry,
@@ -16,15 +17,15 @@ from ops.manifests import (
     Manifests,
     Patch,
 )
-from ops.model import Relation
 
 log = logging.getLogger(__file__)
+NAMESPACE = "vmware-system-csi"
 SECRET_NAME = "vsphere-config-secret"
 SECRET_DATA = "csi-vsphere.conf"
 STORAGE_CLASS_NAME = "csi-vsphere-{type}"
 
 
-class UpdateDeployment(Patch):
+class UpdateStorageDeployment(Patch):
     """Update the Deployment object to reference juju supplied node selector and replica."""
 
     def __call__(self, obj):
@@ -45,9 +46,19 @@ class UpdateDeployment(Patch):
         replicas = self.manifests.config.get("replicas")
         if not replicas:
             log.warning(f"Using storage default replicas of {obj.spec.replicas}")
-            return
-        obj.spec.replicas = replicas
-        log.info(f"Setting storage deployment replicas to {replicas}")
+        else:
+            obj.spec.replicas = replicas
+            log.info(f"Setting storage deployment replicas to {replicas}")
+
+        obj.spec.template.spec.tolerations += [
+            Toleration(
+                key=taint.key,
+                value=taint.value,
+                effect=taint.effect,
+            )
+            for taint in self.manifests.config.get("control-node-taints", [])
+        ]
+        log.info("Adding storage tolerations from control-plane")
 
 
 class CreateSecret(Addition):
@@ -60,7 +71,7 @@ class CreateSecret(Addition):
                 apiVersion="v1",
                 kind="Secret",
                 type="Opaque",
-                metadata=dict(name=SECRET_NAME),
+                metadata=dict(name=SECRET_NAME, namespace=NAMESPACE),
                 data=dict(),
             )
         )
@@ -124,16 +135,15 @@ class VsphereStorageManifests(Manifests):
         charm,
         charm_config,
         integrator,
-        control_plane: Relation,
         kube_control,
         model_uuid: str,
     ):
         manipulations = [
-            CreateNamespace(self, "vmware-system-csi"),
+            CreateNamespace(self, NAMESPACE),
             CreateSecret(self),
             ManifestLabel(self),
             ConfigRegistry(self),
-            UpdateDeployment(self),
+            UpdateStorageDeployment(self),
             CreateStorageClass(self, "default"),  # creates csi-vsphere-default
         ]
         super().__init__(
@@ -144,7 +154,6 @@ class VsphereStorageManifests(Manifests):
         )
         self.charm_config = charm_config
         self.integrator = integrator
-        self.control_plane = control_plane
         self.kube_control = kube_control
         self.model_uuid = model_uuid
 
@@ -157,12 +166,16 @@ class VsphereStorageManifests(Manifests):
             config["username"] = self.integrator.user
             config["password"] = self.integrator.password
             config["datacenter"] = self.integrator.datacenter
-        if self.kube_control.is_ready:
-            config["image-registry"] = self.kube_control.registry_location
 
-        if self.control_plane:
-            config["control-node-selector"] = {"juju-application": self.control_plane.app.name}
-            config["replicas"] = len(self.control_plane.units)
+        if self.kube_control.is_ready:
+            config["image-registry"] = self.kube_control.get_registry_location()
+            config["control-node-taints"] = self.kube_control.get_controller_taints() or [
+                Toleration("NoSchedule", "node-role.kubernetes.io/control-plane")
+            ]  # by default
+            config["control-node-selector"] = {
+                label.key: label.value for label in self.kube_control.get_controller_labels()
+            } or {"juju-application": self.kube_control.relation.app.name}
+            config["replicas"] = len(self.kube_control.relation.units)
 
         config.update(**self.charm_config.available_data)
 
@@ -176,7 +189,7 @@ class VsphereStorageManifests(Manifests):
 
     def hash(self) -> int:
         """Calculate a hash of the current configuration."""
-        return int(md5(json.dumps(self.config, sort_keys=True).encode("utf8")).hexdigest(), 16)
+        return int(md5(pickle.dumps(self.config)).hexdigest(), 16)
 
     def evaluate(self) -> Optional[str]:
         """Determine if manifest_config can be applied to manifests."""

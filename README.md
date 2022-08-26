@@ -2,7 +2,11 @@
 
 ## Description
 
-This subordinate charm manages the Cloud Provider component of the vSphere.
+This subordinate charm manages the cloud-provider and vsphere-csi-driver components in vSphere.
+
+## Requirements
+* vSphere infrastructure must support version 15+ VMs (tested on version 17)
+   * See [vmware compatibility docs](https://docs.vmware.com/en/VMware-vSphere/6.7/com.vmware.vsphere.vm_admin.doc/GUID-789C3913-1053-4850-A0F0-E29C3D32B6DA.html)
 
 ## Usage
 
