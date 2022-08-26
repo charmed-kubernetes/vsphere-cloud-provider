@@ -23,7 +23,7 @@ class CharmConfig:
             object_value = {}
             for label in value.split(" "):
                 key, value = label.split("=")
-                object_value[key] = value.strip('"')
+                object_value[key] = value
             return object_value
         return None
 

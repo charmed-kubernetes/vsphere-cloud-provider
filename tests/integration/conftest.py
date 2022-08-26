@@ -6,7 +6,7 @@ import string
 from pathlib import Path
 
 import pytest
-from lightkube import Client, KubeConfig
+from lightkube import AsyncClient, KubeConfig
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Namespace
 
@@ -41,12 +41,12 @@ async def kubernetes(kubeconfig, module_name):
     rand_str = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
     namespace = f"{module_name}-{rand_str}"
     config = KubeConfig.from_file(kubeconfig)
-    client = Client(
+    client = AsyncClient(
         config=config.get(context_name="juju-context"),
         namespace=namespace,
         trust_env=False,
     )
     namespace_obj = Namespace(metadata=ObjectMeta(name=namespace))
-    client.create(namespace_obj)
+    await client.create(namespace_obj)
     yield client
-    client.delete(Namespace, namespace)
+    await client.delete(Namespace, namespace)
