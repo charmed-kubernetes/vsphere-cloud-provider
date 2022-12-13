@@ -6,6 +6,7 @@
 import logging
 from pathlib import Path
 
+from lightkube.core.exceptions import ApiError
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.interface_kube_control import KubeControlRequirer
@@ -23,7 +24,7 @@ log = logging.getLogger(__name__)
 
 
 class VsphereCloudProviderCharm(CharmBase):
-    """Dispatch logic for the VpshereCC operator charm."""
+    """Dispatch logic for the vSphereCP operator charm."""
 
     CA_CERT_PATH = Path("/srv/kubernetes/ca.crt")
 
@@ -201,8 +202,11 @@ class VsphereCloudProviderCharm(CharmBase):
         self.unit.status = MaintenanceStatus("Deploying vSphere Cloud Provider")
         self.unit.set_workload_version("")
         for controller in self.collector.manifests.values():
-            controller.apply_manifests()
-        self.stored.deployed = True
+            try:
+                controller.apply_manifests()
+                self.stored.deployed = True
+            except ApiError:
+                self.unit.status = WaitingStatus("Waiting for kube-apiserver")
 
     def _cleanup(self, _event):
         if self.stored.config_hash:
