@@ -23,9 +23,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install and prepare LXD snap environment
         run: |
+          # Remove docker to avoid network issues https://github.com/charmed-kubernetes/vsphere-cloud-provider/pull/19
+          sudo rm -rf /etc/docker
+          sudo apt-get purge moby-buildx moby-engine moby-cli moby-compose moby-containerd moby-runc -y
+          sudo iptables -P FORWARD ACCEPT
           sudo apt-get remove -qy lxd lxd-client | true
           sudo snap list lxd | true
           sudo snap install lxd --channel=latest/stable
@@ -69,9 +73,9 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: 3.8
       - name: Setup operator environment
@@ -103,7 +107,7 @@ jobs:
           mv juju-crashdump-* tmp/ | true
       - name: Upload debug artifacts
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: test-run-artifacts
           path: tmp
