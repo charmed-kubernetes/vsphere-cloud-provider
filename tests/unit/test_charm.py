@@ -194,6 +194,7 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
             "Adding storage tolerations from control-plane",
         }
 
+
 def test_install_or_upgrade_apierror(harness: Harness, lk_client, api_error_klass):
     lk_client.apply.side_effect = [mock.MagicMock(), api_error_klass]
     harness.begin_with_initial_hooks()
