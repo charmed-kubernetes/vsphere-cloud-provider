@@ -3,7 +3,16 @@
 import unittest.mock as mock
 
 import pytest
+from lightkube import ApiError
 
+@pytest.fixture()
+def api_error_klass():
+    class TestApiError(ApiError):
+        status = mock.MagicMock()
+
+        def __init__(self):
+            pass
+    yield TestApiError
 
 @pytest.fixture(autouse=True)
 def lk_client():

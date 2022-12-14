@@ -193,3 +193,13 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
             "Setting storage deployment replicas to 2",
             "Adding storage tolerations from control-plane",
         }
+
+def test_install_or_upgrade_apierror(harness: Harness, lk_client, api_error_klass):
+    lk_client.apply.side_effect = [mock.MagicMock(), api_error_klass]
+    harness.begin_with_initial_hooks()
+    charm = harness.charm
+    charm.stored.config_hash = "mock_hash"
+    mock_event = mock.MagicMock()
+    charm._install_or_upgrade(mock_event)
+    mock_event.defer.assert_called_once()
+    assert isinstance(charm.unit.status, WaitingStatus)
