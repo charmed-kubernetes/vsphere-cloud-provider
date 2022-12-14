@@ -204,9 +204,11 @@ class VsphereCloudProviderCharm(CharmBase):
         for controller in self.collector.manifests.values():
             try:
                 controller.apply_manifests()
-                self.stored.deployed = True
             except ApiError:
                 self.unit.status = WaitingStatus("Waiting for kube-apiserver")
+                _event.defer()
+                return
+        self.stored.deployed = True
 
     def _cleanup(self, _event):
         if self.stored.config_hash:
