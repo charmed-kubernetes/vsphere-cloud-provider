@@ -3,6 +3,8 @@
 name: vsphere-cloud-provider
 display-name: vSphere Cloud Provider
 summary: Runs the vSphere Cloud Provider in the cluster.
+source: https://github.com/charmed-kubernetes/vsphere-cloud-provider
+issues: https://bugs.launchpad.net/charm-vsphere-cloud-provider
 docs: https://discourse.charmhub.io/t/vsphere-cloud-provider-docs-index/6563
 description: >-
   The vSphere cloud provider provides the Kubernetes cluster access to

@@ -16,6 +16,12 @@ relation to the [vSphere Integrator charm](https://charmhub.io/vsphere-integrato
 
 ## Deployment
 
+### Quickstart
+The vSphere Cloud Provider subordinate charm can be deployed alongside Charmed Kubernetes using the overlay provided in the [Charmed Kubernetes bundle repository](https://github.com/charmed-kubernetes/bundle/blob/main/overlays/vsphere-overlay.yaml):
+```bash
+juju deploy charmed-kubernetes --overlay vsphere-overlay.yaml
+```
+
 ### The full process
 
 ```bash
@@ -34,7 +40,7 @@ kubectl describe nodes |egrep "Taints:|Name:|Provider"
 
 ### Details
 
-* Requires a `charmed-kubernetes` deployment on a vsphere cloud launched by juju
+* Requires a `charmed-kubernetes` deployment on a vsphere cloud launched by juju with the `allow-privileged` flag enabled.
 * Deploy the `vsphere-integrator` charm into the model using `--trust` so juju provided vsphere credentials
 * Deploy the `vsphere-cloud-provider` charm in the model relating to the integrator and to charmed-kubernetes components
 * Once the model is active/idle, the cloud-provider charm will have successfully deployed the vsphere controller in the kube-system
