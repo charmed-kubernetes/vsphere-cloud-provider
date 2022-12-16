@@ -20,7 +20,7 @@ jobs:
 
   charmcraft-build:
     name: Build Charm
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Check out code
         uses: actions/checkout@v3
