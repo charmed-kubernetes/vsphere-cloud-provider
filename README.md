@@ -17,9 +17,9 @@ relation to the [vSphere Integrator charm](https://charmhub.io/vsphere-integrato
 ## Deployment
 
 ### Quickstart
-The vSphere Cloud Provider subordinate charm can be deployed alongside Charmed Kubernetes using the overlay provided in this repository:
+The vSphere Cloud Provider subordinate charm can be deployed alongside Charmed Kubernetes using the overlay provided in the [Charmed Kubernetes bundle repository](https://github.com/charmed-kubernetes/bundle/blob/main/overlays/vsphere-overlay.yaml):
 ```bash
-juju deploy charmed-kubernetes --overlay overlay.yaml
+juju deploy charmed-kubernetes --overlay vsphere-overlay.yaml
 ```
 
 ### The full process
