@@ -6,12 +6,15 @@
 import unittest.mock as mock
 from pathlib import Path
 
+import ops.testing
 import pytest
 import yaml
 from ops.model import BlockedStatus, MaintenanceStatus, WaitingStatus
 from ops.testing import Harness
 
 from charm import VsphereCloudProviderCharm
+
+ops.testing.SIMULATE_CAN_CONNECT = True
 
 
 @pytest.fixture
@@ -159,6 +162,7 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
             'Applying provider Control Node Selector as gcp.io/my-control-node: ""',
         }
         assert storage_messages == {
+            "Setting CSIMigration to false",
             "Creating storage secret data for server vsphere.local",
             "Creating storage class csi-vsphere-default",
             'Applying storage Control Node Selector as gcp.io/my-control-node: ""',
@@ -187,6 +191,7 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
             'Applying provider Control Node Selector as juju-application: "kubernetes-control-plane"',
         }
         assert storage_messages == {
+            "Setting CSIMigration to false",
             "Creating storage secret data for server 1.2.3.4",
             "Creating storage class csi-vsphere-default",
             'Applying storage Control Node Selector as juju-application: "kubernetes-control-plane"',

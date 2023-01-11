@@ -84,3 +84,9 @@ options:
       
       The current release deployed is available by viewing
         juju status vsphere-cloud-provider
+  csi-migration:
+    description: |
+      Enables the CSIMigration feature of the storage-provider allowing
+      the driver plugin to migrate in-tree volumes to the out-of-tree provider.
+    type: string
+    default: "false"

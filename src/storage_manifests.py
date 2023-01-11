@@ -61,6 +61,25 @@ class UpdateStorageDeployment(Patch):
         log.info("Adding storage tolerations from control-plane")
 
 
+class EnableCSIMigration(Patch):
+    """Update Internal Features ConfigMap to handle CSIMigration."""
+
+    def __call__(self, obj: AnyResource) -> None:
+        """Handle CSIMigation from charm config."""
+        if not (
+            obj.kind == "ConfigMap"
+            and obj.metadata.name == "internal-feature-states.csi.vsphere.vmware.com"
+        ):
+            return
+        data = obj.data
+        if not isinstance(data, dict):
+            log.error(f"data was an unexpected type: {type(data)}")
+            return
+        migration = self.manifests.config.get("csi-migration")
+        data["csi-migration"] = migration
+        log.info(f"Setting CSIMigration to {migration}")
+
+
 class CreateSecret(Addition):
     """Create secret for the deployment."""
 
@@ -145,6 +164,7 @@ class VsphereStorageManifests(Manifests):
             ConfigRegistry(self),
             UpdateStorageDeployment(self),
             CreateStorageClass(self, "default"),  # creates csi-vsphere-default
+            EnableCSIMigration(self),
         ]
         super().__init__(
             "vsphere-csi-driver",
