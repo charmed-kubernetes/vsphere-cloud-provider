@@ -20,10 +20,10 @@ jobs:
 
   charmcraft-build:
     name: Build Charm
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install and prepare LXD snap environment
         run: |
           sudo apt-get remove -qy lxd lxd-client | true
@@ -36,6 +36,12 @@ jobs:
           sudo lxc network set lxdbr0 ipv6.address none
           sudo usermod -a -G lxd $USER
           sg lxd -c 'lxc version'
+      - name: Remove Docker
+        run: |
+          # https://github.com/canonical/lxd-cloud/blob/f20a64a8af42485440dcbfd370faf14137d2f349/test/includes/lxd.sh#L13-L23
+          sudo rm -rf /etc/docker
+          sudo apt-get purge moby-buildx moby-engine moby-cli moby-compose moby-containerd moby-runc -y
+          sudo iptables -P FORWARD ACCEPT
       - name: Install Charmcraft
         run: |
           sudo snap install charmcraft --classic --channel=latest/stable
@@ -63,9 +69,9 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: 3.8
       - name: Setup operator environment
@@ -97,7 +103,7 @@ jobs:
           mv juju-crashdump-* tmp/ | true
       - name: Upload debug artifacts
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: test-run-artifacts
           path: tmp

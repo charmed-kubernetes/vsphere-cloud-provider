@@ -6,12 +6,15 @@
 import unittest.mock as mock
 from pathlib import Path
 
+import ops.testing
 import pytest
 import yaml
 from ops.model import BlockedStatus, MaintenanceStatus, WaitingStatus
 from ops.testing import Harness
 
 from charm import VsphereCloudProviderCharm
+
+ops.testing.SIMULATE_CAN_CONNECT = True
 
 
 @pytest.fixture
@@ -159,6 +162,7 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
             'Applying provider Control Node Selector as gcp.io/my-control-node: ""',
         }
         assert storage_messages == {
+            "Setting CSIMigration to false",
             "Creating storage secret data for server vsphere.local",
             "Creating storage class csi-vsphere-default",
             'Applying storage Control Node Selector as gcp.io/my-control-node: ""',
@@ -187,9 +191,21 @@ def test_waits_for_config(harness: Harness, lk_client, caplog):
             'Applying provider Control Node Selector as juju-application: "kubernetes-control-plane"',
         }
         assert storage_messages == {
+            "Setting CSIMigration to false",
             "Creating storage secret data for server 1.2.3.4",
             "Creating storage class csi-vsphere-default",
             'Applying storage Control Node Selector as juju-application: "kubernetes-control-plane"',
             "Setting storage deployment replicas to 2",
             "Adding storage tolerations from control-plane",
         }
+
+
+def test_install_or_upgrade_apierror(harness: Harness, lk_client, api_error_klass):
+    lk_client.apply.side_effect = [mock.MagicMock(), api_error_klass]
+    harness.begin_with_initial_hooks()
+    charm = harness.charm
+    charm.stored.config_hash = "mock_hash"
+    mock_event = mock.MagicMock()
+    charm._install_or_upgrade(mock_event)
+    mock_event.defer.assert_called_once()
+    assert isinstance(charm.unit.status, WaitingStatus)
