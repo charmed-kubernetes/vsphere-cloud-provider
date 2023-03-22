@@ -27,13 +27,18 @@ GH_BRANCH = "https://api.github.com/repos/{repo}/branches/{branch}"
 GH_COMMIT = "https://api.github.com/repos/{repo}/commits/{sha}"
 GH_RAW = "https://raw.githubusercontent.com/{repo}/{branch}/{path}/{rel}/{manifest}"
 
+
+def _ver_maker(v: str) -> Tuple[int]:
+    return tuple(map(int, v.split(".")))
+
+
 SOURCES = dict(
     cloud_provider=dict(
         repo="kubernetes/cloud-provider-vsphere",
         manifest="vsphere-cloud-controller-manager.yaml",
         default_branch=True,
         path="releases",
-        version_parser=lambda v: tuple(map(int, v[1:].split("."))),
+        version_parser=lambda v: _ver_maker(v[1:]),
         minimum="v1.2",
     ),
     cloud_storage=dict(
@@ -91,8 +96,7 @@ class Release:
         try:
             return VersionInfo.parse(a) < VersionInfo.parse(b)
         except ValueError:
-            ver_maker = lambda v: tuple(map(int, v.split('.')))
-            return ver_maker(a) < ver_maker(b)
+            return _ver_maker(a) < _ver_maker(b)
 
 
 SyncAsset = TypedDict("SyncAsset", {"source": str, "target": str, "type": str})
@@ -160,7 +164,9 @@ def gather_releases(source: str) -> Tuple[str, Set[Release]]:
         with urllib.request.urlopen(GH_TAGS.format(**context)) as resp:
             releases = sorted(
                 [
-                    Release(item["name"], Path(GH_RAW.format(branch=item["name"], rel="", **context)))
+                    Release(
+                        item["name"], Path(GH_RAW.format(branch=item["name"], rel="", **context))
+                    )
                     for item in json.load(resp)
                     if (
                         VERSION_RE.match(item["name"])
