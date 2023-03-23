@@ -11,6 +11,7 @@ import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from itertools import accumulate
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Generator, List, Optional, Set, Tuple, TypedDict
@@ -26,13 +27,18 @@ GH_BRANCH = "https://api.github.com/repos/{repo}/branches/{branch}"
 GH_COMMIT = "https://api.github.com/repos/{repo}/commits/{sha}"
 GH_RAW = "https://raw.githubusercontent.com/{repo}/{branch}/{path}/{rel}/{manifest}"
 
+
+def _ver_maker(v: str) -> Tuple[int]:
+    return tuple(map(int, v.split(".")))
+
+
 SOURCES = dict(
     cloud_provider=dict(
         repo="kubernetes/cloud-provider-vsphere",
         manifest="vsphere-cloud-controller-manager.yaml",
         default_branch=True,
         path="releases",
-        version_parser=lambda v: tuple(map(int, v[1:].split("."))),
+        version_parser=lambda v: _ver_maker(v[1:]),
         minimum="v1.2",
     ),
     cloud_storage=dict(
@@ -73,7 +79,7 @@ class Release:
     """Defines a release type."""
 
     name: str
-    path: str
+    path: Path
     size: int = 0
 
     def __hash__(self) -> int:
@@ -83,6 +89,14 @@ class Release:
     def __eq__(self, other) -> bool:
         """Comparible based on its name."""
         return isinstance(other, Release) and self.name == other.name
+
+    def __lt__(self, other) -> bool:
+        """Compare version numbers."""
+        a, b = self.name[1:], other.name[1:]
+        try:
+            return VersionInfo.parse(a) < VersionInfo.parse(b)
+        except ValueError:
+            return _ver_maker(a) < _ver_maker(b)
 
 
 SyncAsset = TypedDict("SyncAsset", {"source": str, "target": str, "type": str})
@@ -111,7 +125,8 @@ def main(source: str, registry: Optional[Registry]):
     new_releases = gh_releases - local_releases
     for release in new_releases:
         local_releases.add(download(source, release))
-    all_images = set(image for release in local_releases for image in images(release))
+    unique_releases = list(dict.fromkeys(accumulate((sorted(local_releases)), dedupe)))
+    all_images = set(image for release in unique_releases for image in images(release))
     if registry:
         mirror_image(all_images, registry)
     return latest, all_images
@@ -137,7 +152,7 @@ def gather_releases(source: str) -> Tuple[str, Set[Release]]:
         with urllib.request.urlopen(tree_url) as resp:
             releases = sorted(
                 [
-                    Release(item["path"], GH_RAW.format(rel=item["path"], **context))
+                    Release(item["path"], Path(GH_RAW.format(rel=item["path"], **context)))
                     for item in json.load(resp)["tree"]
                     if VERSION_RE.match(item["path"])
                     and version_parser(context["minimum"]) <= version_parser(item["path"])
@@ -149,7 +164,9 @@ def gather_releases(source: str) -> Tuple[str, Set[Release]]:
         with urllib.request.urlopen(GH_TAGS.format(**context)) as resp:
             releases = sorted(
                 [
-                    Release(item["name"], GH_RAW.format(branch=item["name"], rel="", **context))
+                    Release(
+                        item["name"], Path(GH_RAW.format(branch=item["name"], rel="", **context))
+                    )
                     for item in json.load(resp)
                     if (
                         VERSION_RE.match(item["name"])
@@ -169,7 +186,7 @@ def gather_current(source: str) -> Set[Release]:
     """Gather currently supported manifests by the charm."""
     manifest = SOURCES[source]["manifest"]
     return set(
-        Release(release_path.parent.name, str(release_path), release_path.stat().st_size)
+        Release(release_path.parent.name, release_path, release_path.stat().st_size)
         for release_path in (FILEDIR / source / "manifests").glob(f"*/{manifest}")
     )
 
@@ -182,6 +199,22 @@ def download(source: str, release: Release) -> Release:
     dest.parent.mkdir(exist_ok=True)
     urllib.request.urlretrieve(release.path, dest)
     return Release(release.name, str(dest), release.size)
+
+
+def dedupe(this: Release, next: Release) -> Release:
+    """Remove duplicate releases.
+
+    returns this release if this==next by content
+    returns next release if this!=next by content
+    """
+    if this.path.read_text() != next.path.read_text():
+        # Found different in at least one file
+        return next
+
+    next.path.unlink()
+    next.path.parent.rmdir()
+    log.info(f"Deleting Duplicate Release {next.name}")
+    return this
 
 
 def images(component: Release) -> Generator[str, None, None]:
