@@ -28,7 +28,7 @@ GH_COMMIT = "https://api.github.com/repos/{repo}/commits/{sha}"
 GH_RAW = "https://raw.githubusercontent.com/{repo}/{branch}/{path}/{rel}/{manifest}"
 
 
-def _ver_maker(v: str) -> Tuple[int]:
+def _ver_maker(v: str) -> Tuple[int, ...]:
     return tuple(map(int, v.split(".")))
 
 
@@ -79,8 +79,9 @@ class Release:
     """Defines a release type."""
 
     name: str
-    path: Path
+    path: Path = Path()
     size: int = 0
+    upstream: str = ""
 
     def __hash__(self) -> int:
         """Unique based on its name."""
@@ -152,7 +153,7 @@ def gather_releases(source: str) -> Tuple[str, Set[Release]]:
         with urllib.request.urlopen(tree_url) as resp:
             releases = sorted(
                 [
-                    Release(item["path"], Path(GH_RAW.format(rel=item["path"], **context)))
+                    Release(item["path"], upstream=GH_RAW.format(rel=item["path"], **context))
                     for item in json.load(resp)["tree"]
                     if VERSION_RE.match(item["path"])
                     and version_parser(context["minimum"]) <= version_parser(item["path"])
@@ -165,7 +166,8 @@ def gather_releases(source: str) -> Tuple[str, Set[Release]]:
             releases = sorted(
                 [
                     Release(
-                        item["name"], Path(GH_RAW.format(branch=item["name"], rel="", **context))
+                        item["name"],
+                        upstream=GH_RAW.format(branch=item["name"], rel="", **context),
                     )
                     for item in json.load(resp)
                     if (
@@ -197,8 +199,8 @@ def download(source: str, release: Release) -> Release:
     manifest = SOURCES[source]["manifest"]
     dest = FILEDIR / source / "manifests" / release.name / manifest
     dest.parent.mkdir(exist_ok=True)
-    urllib.request.urlretrieve(release.path, dest)
-    return Release(release.name, str(dest), release.size)
+    urllib.request.urlretrieve(release.upstream, dest)
+    return Release(release.name, dest, release.size)
 
 
 def dedupe(this: Release, next: Release) -> Release:
@@ -226,7 +228,7 @@ def images(component: Release) -> Generator[str, None, None]:
                 yield m.groups()[0]
 
 
-def mirror_image(images: List[str], registry: Registry):
+def mirror_image(images: Set[str], registry: Registry):
     """Synchronize all source images to target registry, only pushing changed layers."""
     sync_config = SyncConfig(
         version=1,
