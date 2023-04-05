@@ -37,17 +37,17 @@ options:
   image-registry:
     type: string
     description: |
-      Source registry of metrics server images.
+      Image registry of vsphere cloud provider images.
 
-      By setting to a value, each image listed in the releases manifest
-      has its image-registry replaced.
+      The value set here will replace the host portion of each image URL in
+      the release manifests.
 
-      If unset, the manifests will use the image registry from the kube-control relation
+      If unset, the image registry from the kube-control relation will be used.
 
       example)
-        juju config kubernetes-metrics-server image-registry='rocks.canonical.com:443/cdk'
+        juju config vsphere-cloud-provider image-registry='rocks.canonical.com:443/cdk'
 
-        juju config kubernetes-metrics-server --reset image-registry
+        juju config vsphere-cloud-provider --reset image-registry
 
   provider-release:
     type: string
@@ -84,6 +84,7 @@ options:
       
       The current release deployed is available by viewing
         juju status vsphere-cloud-provider
+
   csi-migration:
     description: |
       Enables the CSIMigration feature of the storage-provider allowing
