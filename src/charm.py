@@ -200,26 +200,27 @@ class VsphereCloudProviderCharm(CharmBase):
                 return
             new_hash += controller.hash()
 
-        if new_hash == self.stored.config_hash:
-            return
-
-        self.stored.config_hash = new_hash
         self.stored.deployed = False
-        self._install_or_upgrade(event)
+        if self._install_or_upgrade(event, config_hash=new_hash):
+            self.stored.config_hash = new_hash
+            self.stored.deployed = True
 
-    def _install_or_upgrade(self, event):
-        if not self.stored.config_hash:
-            return
+    def _install_or_upgrade(self, event, config_hash=None):
+        if self.stored.config_hash == config_hash:
+            log.info("Skipping until the config is evaluated.")
+            return True
+
         self.unit.status = MaintenanceStatus("Deploying vSphere Cloud Provider")
         self.unit.set_workload_version("")
         for controller in self.collector.manifests.values():
             try:
                 controller.apply_manifests()
-            except ManifestClientError:
+            except ManifestClientError as e:
                 self.unit.status = WaitingStatus("Waiting for kube-apiserver")
+                log.warn(f"Encountered retryable installation error: {e}")
                 event.defer()
-                return
-        self.stored.deployed = True
+                return False
+        return True
 
     def _cleanup(self, event):
         if self.stored.config_hash:
