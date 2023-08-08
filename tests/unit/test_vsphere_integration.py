@@ -11,6 +11,6 @@ from requires_vsphere_integration import VsphereIntegrationData
 
 
 def test_parse_relation_data():
-    d = (yaml.safe_load(Path("tests/data/vsphere_integration_data.yaml").read_text()),)
-    loaded = VsphereIntegrationData(**d[0])
+    d = yaml.safe_load(Path("tests/data/vsphere_integration_data.yaml").read_text())
+    loaded = VsphereIntegrationData(**d)
     assert loaded.password == "<super-secret>"
