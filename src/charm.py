@@ -9,13 +9,13 @@ from pathlib import Path
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.interface_kube_control import KubeControlRequirer
+from ops.interface_tls_certificates import CertificatesRequires
 from ops.main import main
 from ops.manifests import Collector, ManifestClientError
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
 
 from config import CharmConfig
 from provider_manifests import VsphereProviderManifests
-from requires_certificates import CertificatesRequires
 from requires_vsphere_integration import VsphereIntegrationRequires
 from storage_manifests import VsphereStorageManifests
 
