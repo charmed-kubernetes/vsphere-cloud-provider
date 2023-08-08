@@ -66,7 +66,7 @@ class VsphereIntegrationRequires(Object):
         return None
 
     @property
-    def is_ready(self):
+    def is_ready(self) -> bool:
         """Whether the request for this instance has been completed."""
         try:
             self._data
@@ -78,42 +78,51 @@ class VsphereIntegrationRequires(Object):
             return False
         return True
 
-    def _value(self, key):
-        if not self._data:
-            return None
-        return self._data.get(key)
-
     @property
-    def datacenter(self):
+    def datacenter(self) -> Optional[str]:
         """The datacenter value."""
-        return self._value("datacenter")
+        if not self.is_ready:
+            return None
+        return self._data.datacenter
 
     @property
-    def datastore(self):
+    def datastore(self) -> Optional[str]:
         """The datastore value."""
-        return self._value("datastore")
+        if not self.is_ready:
+            return None
+        return self._data.datastore
 
     @property
-    def folder(self):
+    def folder(self) -> Optional[str]:
         """The folder value."""
-        return self._value("folder")
+        if not self.is_ready:
+            return None
+        return self._data.folder
 
     @property
-    def user(self):
+    def user(self) -> Optional[str]:
         """The user value."""
-        return self._value("user")
+        if not self.is_ready:
+            return None
+        return self._data.user
 
     @property
-    def password(self):
+    def password(self) -> Optional[str]:
         """The password value."""
-        return self._value("password")
+        if not self.is_ready:
+            return None
+        return self._data.password
 
     @property
-    def respool_path(self):
+    def respool_path(self) -> Optional[str]:
         """The respool_path value."""
-        return self._value("respool_path")
+        if not self.is_ready:
+            return None
+        return self._data.respool_path
 
     @property
-    def vsphere_ip(self):
+    def vsphere_ip(self) -> Optional[str]:
         """The vsphere_ip value."""
-        return self._value("vsphere_ip")
+        if not self.is_ready:
+            return None
+        return self._data.vsphere_ip
