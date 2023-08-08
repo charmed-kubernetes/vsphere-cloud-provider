@@ -5,18 +5,20 @@
 This only implements the requires side, currently, since the integrator
 is still using the Reactive Charm framework self.
 """
-import json
 import logging
 from typing import Optional
 
 from backports.cached_property import cached_property
 from ops.charm import RelationBrokenEvent
 from ops.framework import Object
-from pydantic import BaseModel, Extra, Field, StrictStr, ValidationError
+from pydantic import BaseModel, Extra, StrictStr, ValidationError
 
 log = logging.getLogger(__name__)
 
+
 class VsphereIntegrationData(BaseModel, extra=Extra.allow):
+    """Requires side of schema of vsphere-integration relation."""
+
     datacenter: StrictStr
     datastore: Optional[StrictStr]
     folder: Optional[StrictStr]
