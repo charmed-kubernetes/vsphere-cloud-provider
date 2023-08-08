@@ -11,7 +11,7 @@ from typing import Optional
 from backports.cached_property import cached_property
 from ops.charm import RelationBrokenEvent
 from ops.framework import Object
-from pydantic import BaseModel, Extra, StrictStr, ValidationError
+from pydantic import BaseModel, Extra, Json, ValidationError
 
 log = logging.getLogger(__name__)
 
@@ -19,13 +19,13 @@ log = logging.getLogger(__name__)
 class VsphereIntegrationData(BaseModel, extra=Extra.allow):
     """Requires side of schema of vsphere-integration relation."""
 
-    datacenter: StrictStr
-    datastore: Optional[StrictStr]
-    folder: Optional[StrictStr]
-    password: StrictStr
-    respool_path: Optional[StrictStr]
-    user: StrictStr
-    vsphere_ip: StrictStr
+    datacenter: Json[str]
+    datastore: Optional[Json[str]]
+    folder: Optional[Json[str]]
+    password: Json[str]
+    respool_path: Optional[Json[str]]
+    user: Json[str]
+    vsphere_ip: Json[str]
 
 
 class VsphereIntegrationRequires(Object):
