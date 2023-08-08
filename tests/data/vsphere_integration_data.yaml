@@ -1,0 +1,10 @@
+datacenter: '"Timbuktu"'
+datastore: '"vsanDatastore"'
+egress-subnets: 1.2.3.4/32
+folder: '"my-root"'
+ingress-address: 1.2.3.4
+password: '"<super-secret>"'
+private-address: 1.2.3.4
+respool_path: '""'
+user: '"user@vsphere.local"'
+vsphere_ip: '"1.2.3.6"'
