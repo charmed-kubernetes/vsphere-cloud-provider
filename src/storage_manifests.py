@@ -131,8 +131,11 @@ class CreateStorageClass(Addition):
         parameter_config = self.manifests.config["storage-class-parameters"]
         parameters = {}
         for param in parameter_config.split(","):
-            key, val = param.split("=", 1)
-            parameters[key] = val
+            try:
+                key, val = param.split("=", 1)
+                parameters[key] = val
+            except ValueError:
+                log.error("Storage class parameter missing '=' separator in '%s'", param)
         return parameters
 
     def __call__(self) -> Optional[AnyResource]:
