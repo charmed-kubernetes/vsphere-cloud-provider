@@ -88,7 +88,7 @@ class Release:
         return hash(self.name)
 
     def __eq__(self, other) -> bool:
-        """Comparible based on its name."""
+        """Comparable based on its name."""
         return isinstance(other, Release) and self.name == other.name
 
     def __lt__(self, other) -> bool:
