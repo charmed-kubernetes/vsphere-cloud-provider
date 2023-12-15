@@ -85,9 +85,22 @@ options:
       The current release deployed is available by viewing
         juju status vsphere-cloud-provider
 
+  storage-class-parameters:
+    type: string
+    description: |
+      Specify extra parmeters to the default storage class installed. 
+      Each parameter is separated by commas and are key=value pairs
+
+      example)
+        storagepolicyname=vSAN Default Storage Policy
+        storagepolicyname=vSAN Default Storage Policy,datastoreurl=ds:///vmfs/volumes/vsan:52cdfa80721ff516-ea1e993113acfc77/
+
+    default: 'storagepolicyname=vSAN Default Storage Policy'
+
   csi-migration:
     description: |
       Enables the CSIMigration feature of the storage-provider allowing
       the driver plugin to migrate in-tree volumes to the out-of-tree provider.
     type: string
     default: "false"
+

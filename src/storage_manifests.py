@@ -126,6 +126,18 @@ class CreateStorageClass(Addition):
         super().__init__(manifests)
         self.type = sc_type
 
+    @property
+    def _params(self) -> Dict[str, str]:
+        parameter_config = self.manifests.config["storage-class-parameters"]
+        parameters = {}
+        for param in parameter_config.split(","):
+            try:
+                key, val = param.split("=", 1)
+                parameters[key] = val
+            except ValueError:
+                log.error("Storage class parameter missing '=' separator in '%s'", param)
+        return parameters
+
     def __call__(self) -> Optional[AnyResource]:
         """Craft the storage class object."""
         storage_name = STORAGE_CLASS_NAME.format(type=self.type)
@@ -141,7 +153,7 @@ class CreateStorageClass(Addition):
                     },
                 ),
                 provisioner="csi.vsphere.vmware.com",
-                parameters=dict(storagepolicyname="vSAN Default Storage Policy"),
+                parameters=self._params,
             )
         )
 
