@@ -52,5 +52,5 @@ kubectl describe nodes |egrep "Taints:|Name:|Provider"
 
 Please see the [Juju SDK docs](https://juju.is/docs/sdk) for guidelines
 on enhancements to this charm following best practice guidelines, and
-[CONTRIBUTING.md](https://github.com/canonical/vsphere-cloud-provider/blob/main/CONTRIBUTING.md)
+[CONTRIBUTING.md](https://github.com/charmed-kubernetes/vsphere-cloud-provider/blob/main/CONTRIBUTING.md)
 for developer guidance.
