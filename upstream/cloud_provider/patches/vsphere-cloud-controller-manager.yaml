@@ -1,0 +1,5 @@
+ignore-releases:
+- v1.27
+ignore-images:
+- gcr.io/cloud-provider-vsphere
+replace-images: []
