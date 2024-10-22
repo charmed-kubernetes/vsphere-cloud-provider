@@ -1,0 +1,12 @@
+ignore-releases:
+- v3.0.2
+- v3.0.3
+- v3.1.0
+- v3.1.1
+ignore-images:
+- gcr.io/cloud-provider-vsphere
+replace-images:
+- find: gcr.io/cloud-provider-vsphere/csi/release/syncer
+  replace: registry.k8s.io/csi-vsphere/syncer
+- find: gcr.io/cloud-provider-vsphere/csi/release/driver
+  replace: registry.k8s.io/csi-vsphere/driver

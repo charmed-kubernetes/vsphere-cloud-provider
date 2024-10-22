@@ -3,6 +3,7 @@
 # See LICENSE file for licensing details.
 """Update to a new upstream release."""
 import argparse
+import functools
 import json
 import logging
 import re
@@ -14,7 +15,7 @@ from dataclasses import dataclass
 from itertools import accumulate
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Generator, List, Optional, Set, Tuple, TypedDict
+from typing import Generator, Iterable, List, Optional, Set, Tuple, TypedDict
 
 import yaml
 from semver import VersionInfo
@@ -26,6 +27,7 @@ GH_TAGS = "https://api.github.com/repos/{repo}/tags"
 GH_BRANCH = "https://api.github.com/repos/{repo}/branches/{branch}"
 GH_COMMIT = "https://api.github.com/repos/{repo}/commits/{sha}"
 GH_RAW = "https://raw.githubusercontent.com/{repo}/{branch}/{path}/{rel}/{manifest}"
+ROCKS_CC = "upload.rocks.canonical.com:5000/cdk"
 
 
 def _ver_maker(v: str) -> Tuple[int, ...]:
@@ -52,26 +54,53 @@ SOURCES = dict(
 )
 FILEDIR = Path(__file__).parent
 VERSION_RE = re.compile(r"^v\d+\.\d+")
-IMG_RE = re.compile(r"^\s+image:\s+(\S+)")
+IMG_RE = re.compile(r"^(\s+image:\s+)(\S+)")
 
 
 @dataclass(frozen=True)
 class Registry:
     """Object to define how to contact a Registry."""
 
-    name: str
-    path: str
-    user: str
-    pass_file: str
+    base: str
+    user_pass: Optional[str] = None
 
     @property
-    def creds(self) -> "SyncCreds":
+    def name(self) -> str:
+        """Get the name of the registry."""
+        name, *_ = self.base.split("/")
+        return name
+
+    @property
+    def path(self) -> List[str]:
+        """Get the path to the registry."""
+        _, *path = self.base.split("/")
+        return path
+
+    @property
+    def user(self) -> str:
+        """Get the user for the registry."""
+        user, _ = self.user_pass.split(":", 1)
+        return user
+
+    @property
+    def password(self) -> str:
+        """Get the password for the registry."""
+        _, pw = self.user_pass.split(":", 1)
+        return pw
+
+    @property
+    def creds(self) -> List["SyncCreds"]:
         """Get credentials as a SyncCreds Dict."""
-        return {
-            "registry": self.name,
-            "user": self.user,
-            "pass": Path(self.pass_file).read_text().strip(),
-        }
+        creds = []
+        if self.user_pass:
+            creds.append(
+                {
+                    "registry": self.name,
+                    "user": self.user,
+                    "pass": self.password,
+                }
+            )
+        return creds
 
 
 @dataclass(frozen=True)
@@ -112,24 +141,49 @@ class SyncConfig(TypedDict):
     sync: List[SyncAsset]
 
 
+def migrate_source(image: str) -> str:
+    """Source image registries were migrated to a new registry."""
+    return image
+
+
 def sync_asset(image: str, registry: Registry):
     """Factory for generating SyncAssets."""
-    _, tag = image.split("/", 1)
-    dest = f"{registry.name}/{registry.path.strip('/')}/{tag}"
-    return SyncAsset(source=image, target=dest, type="image")
+    _, *name_tag = image.split("/")
+    full_path = "/".join(registry.path + name_tag)
+    dest = f"{registry.name}/{full_path}"
+    return SyncAsset(source=migrate_source(image), target=dest, type="image")
 
 
-def main(source: str, registry: Optional[Registry]):
+@functools.lru_cache()
+def source_patches(source: str) -> dict:
+    """Load the patch file for a source."""
+    manifest = SOURCES[source]["manifest"]
+    patch = FILEDIR / source / "patches" / manifest
+    return yaml.safe_load(patch.open())
+
+
+def available_releases(
+    source: str, new_releases: Iterable[Release]
+) -> Generator[Release, None, None]:
+    """Filter out releases that are to be ignored."""
+    patcher = source_patches(source)
+    for release in new_releases:
+        if release.name in patcher["ignore-releases"]:
+            log.info(f"Ignoring Release {source}: {release.name}")
+            continue
+        yield release
+
+
+def main(source: str, registry: Registry, check: bool, debug: bool):
     """Main update logic."""
     local_releases = gather_current(source)
     latest, gh_releases = gather_releases(source)
     new_releases = gh_releases - local_releases
-    for release in new_releases:
+    for release in available_releases(source, new_releases):
         local_releases.add(download(source, release))
     unique_releases = list(dict.fromkeys(accumulate((sorted(local_releases)), dedupe)))
-    all_images = set(image for release in unique_releases for image in images(release))
-    if registry:
-        mirror_image(all_images, registry)
+    all_images = set(image for release in unique_releases for image in images(source, release))
+    mirror_image(all_images, registry, check, debug)
     return latest, all_images
 
 
@@ -193,6 +247,21 @@ def gather_current(source: str) -> Set[Release]:
     )
 
 
+def replace_images(release: Release, patcher: dict):
+    """Replace images in a release."""
+    lines = release.path.read_text().splitlines(True)
+    with release.path.open("w") as fp:
+        for line in lines:
+            if m := IMG_RE.match(line):
+                head, image = m.groups()
+                for replacer in patcher["replace-images"]:
+                    if image.startswith(replacer["find"]):
+                        image = image.replace(replacer["find"], replacer["replace"])
+                        break
+                line = f"{head}{image}\n"
+            fp.write(line)
+
+
 def download(source: str, release: Release) -> Release:
     """Download the manifest files for a specific release."""
     log.info(f"Getting Release {source}: {release.name}")
@@ -200,7 +269,10 @@ def download(source: str, release: Release) -> Release:
     dest = FILEDIR / source / "manifests" / release.name / manifest
     dest.parent.mkdir(exist_ok=True)
     urllib.request.urlretrieve(release.upstream, dest)
-    return Release(release.name, dest, release.size)
+    r = Release(release.name, dest, release.size)
+    patcher = source_patches(source)
+    replace_images(r, patcher)
+    return r
 
 
 def dedupe(this: Release, next: Release) -> Release:
@@ -219,33 +291,40 @@ def dedupe(this: Release, next: Release) -> Release:
     return this
 
 
-def images(component: Release) -> Generator[str, None, None]:
+def images(source: str, component: Release) -> Generator[str, None, None]:
     """Yield all images from each release."""
+    patcher = source_patches(source)
     with Path(component.path).open() as fp:
         for line in fp:
-            m = IMG_RE.match(line)
-            if m:
-                yield m.groups()[0]
+            if m := IMG_RE.match(line):
+                image = m.groups()[1]
+                if any(image.startswith(i) for i in patcher["ignore-images"]):
+                    log.info(f"Ignoring Image {source}: {image}")
+                    continue
+                yield image
 
 
-def mirror_image(images: Set[str], registry: Registry):
+def mirror_image(images: List[str], registry: Registry, check: bool, debug: bool):
     """Synchronize all source images to target registry, only pushing changed layers."""
     sync_config = SyncConfig(
         version=1,
-        creds=[registry.creds],
+        creds=registry.creds,
         sync=[sync_asset(image, registry) for image in images],
     )
     with NamedTemporaryFile(mode="w") as tmpfile:
         yaml.safe_dump(sync_config, tmpfile)
+        command = "check" if check else "once"
+        args = ["regsync", "-c", tmpfile.name, command]
+        args += ["-v", "debug"] if debug else []
         proc = subprocess.Popen(
-            ["./regsync", "once", "-c", tmpfile.name, "-v", "debug"],
+            args,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             encoding="utf-8",
         )
         while proc.returncode is None:
             for line in proc.stdout:
-                print(line.strip())
+                log.warning(line.strip())
             proc.poll()
 
 
@@ -257,16 +336,30 @@ def get_argparser():
     )
     parser.add_argument(
         "--registry",
-        default=None,
+        default=ROCKS_CC,
         type=str,
-        nargs=4,
         help="Registry to which images should be mirrored.\n\n"
         "example\n"
-        "  --registry my.registry:5000 path username password-file\n"
-        "\n"
-        "Mirroring depends on binary regsync "
-        "(https://github.com/regclient/regclient/releases)\n"
-        "and that it is available in the current working directory",
+        "  --registry my.registry:5000/path\n"
+        "\n",
+    )
+    parser.add_argument(
+        "--user_pass",
+        default=None,
+        type=str,
+        help="Username and password for the registry separated by a colon\n\n"
+        "if missing, regsync will attempt to use authfrom ${HOME}/.docker/config.json\n"
+        "example\n"
+        "  --user-pass myuser:mypassword\n"
+        "\n",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="If selected, will not run the sync\n" "but instead checks if a sync is necessary",
+    )
+    parser.add_argument(
+        "--debug", action="store_true", help="If selected, regsync debug will appear"
     )
     parser.add_argument(
         "--sources",
@@ -289,10 +382,10 @@ class UpdateError(Exception):
 if __name__ == "__main__":
     try:
         args = get_argparser().parse_args()
-        registry = Registry(*args.registry) if args.registry else None
+        registry = Registry(args.registry, args.user_pass)
         image_set = set()
         for source in args.sources:
-            version, source_images = main(source, registry)
+            version, source_images = main(source, registry, args.check, args.debug)
             Path(FILEDIR, source, "version").write_text(f"{version}\n")
             print(f"source: {source} latest={version}")
             image_set |= source_images
