@@ -2,6 +2,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 """Update to a new upstream release."""
+
 import argparse
 import functools
 import json
@@ -356,7 +357,7 @@ def get_argparser():
     parser.add_argument(
         "--check",
         action="store_true",
-        help="If selected, will not run the sync\n" "but instead checks if a sync is necessary",
+        help="If selected, will not run the sync\nbut instead checks if a sync is necessary",
     )
     parser.add_argument(
         "--debug", action="store_true", help="If selected, regsync debug will appear"
@@ -367,10 +368,7 @@ def get_argparser():
         default=list(SOURCES.keys()),
         choices=SOURCES.keys(),
         type=str,
-        help="Which manifest sources to be updated.\n\n"
-        "example\n"
-        "  --source cloud_provider\n"
-        "\n",
+        help="Which manifest sources to be updated.\n\nexample\n  --source cloud_provider\n\n",
     )
     return parser
 
