@@ -4,5 +4,5 @@ lightkube>=0.10.1,<1.0.0
 pyyaml
 pydantic==1.*
 ops.manifest>=1.1.0,<2.0.0
-git+https://github.com/charmed-kubernetes/interface-kube-control.git@6dd289d1c795fdeda1bed17873b8d6562227c829#subdirectory=ops
-git+https://github.com/charmed-kubernetes/interface-tls-certificates.git@339efe3823b9728d16cdf5bcd1fc3b5de4e68923#subdirectory=ops
+ops.interface-kube-control==0.2.0
+ops.interface-tls-certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates.git@236e089493c96feac5ea1a8617b1059a4477a04e#subdirectory=ops

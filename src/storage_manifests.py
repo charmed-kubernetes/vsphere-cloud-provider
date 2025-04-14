@@ -1,6 +1,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 """Implementation of vsphere specific details of the kubernetes manifests."""
+
 import base64
 import logging
 import pickle

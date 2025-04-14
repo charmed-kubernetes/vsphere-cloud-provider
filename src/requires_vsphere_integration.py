@@ -5,6 +5,7 @@
 This only implements the requires side, currently, since the integrator
 is still using the Reactive Charm framework self.
 """
+
 import logging
 from typing import Optional
 

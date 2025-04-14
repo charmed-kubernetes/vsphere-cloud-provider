@@ -1,28 +1,224 @@
 # Learn more about charmcraft.yaml configuration at:
 # https://juju.is/docs/sdk/charmcraft-config
 
+type: "charm"
+
+name: vsphere-cloud-provider
+title: vSphere Cloud Provider
+summary: Runs the vSphere Cloud Provider in the cluster.
+description: >-
+  The vSphere cloud provider provides the Kubernetes cluster access to
+  native resources from vSphere such as storage.
+links:
+  contact: https://launchpad.net/~containers
+  source:
+  - https://github.com/charmed-kubernetes/vsphere-cloud-provider
+  issues:
+  - https://bugs.launchpad.net/charm-vsphere-cloud-provider
+  documentation: https://discourse.charmhub.io/t/vsphere-cloud-provider-docs-index/6563
+
+subordinate: true
+
+config:
+  options:
+    # Global options
+    server:
+      description: >-
+        Required if not related to the vSphere Integrator. vSphere ip address
+        e.g. `128.110.154.166`
+      type: string
+
+    username:
+      description: >-
+        Required if not related to the vSphere Integrator. vSphere username
+      type: string
+
+    password:
+      description: >-
+        Required if not related to the vSphere Integrator. vSphere password
+      type: string
+
+    datacenter:
+      description: >-
+        Required if not related to the vSphere Integrator. vSphere datacenter
+      type: string
+
+    control-node-selector:
+      description: |
+        Specifies to which nodes this operator adds the vsphere-cpi daemonsets
+        Declare node labels in key=value format, separated by spaces.
+        It's also valid to not have a value, this is interpretted as an empty string.
+
+        Required if not related to kubernetes-control-plane:kube-control
+
+        e.g.
+          node-role.kubernetes.io/control-plane=custom-value
+          node-role.kubernetes.io/control-plane=
+      type: string
+
+    image-registry:
+      type: string
+      description: |
+        Image registry of vsphere cloud provider images.
+
+        The value set here will replace the host portion of each image URL in
+        the release manifests.
+
+        If unset, the image registry from the kube-control relation will be used.
+
+        example)
+          juju config vsphere-cloud-provider image-registry='rocks.canonical.com:443/cdk'
+
+          juju config vsphere-cloud-provider --reset image-registry
+
+    provider-release:
+      type: string
+      description: |
+        Specify the version of cloud-provider as defined by the `releases`
+        directory of https://github.com/kubernetes/cloud-provider-vsphere/
+
+        example)
+          juju config vsphere-cloud-provider provider-release='v1.22'
+
+        A list of supported versions is available through the action:
+          juju run-action vsphere-cloud-provider/0 list-releases --wait
+
+        To reset by to the latest supported by the charm use:
+          juju config vsphere-cloud-provider --reset provider-release
+
+        The current release deployed is available by viewing
+          juju status vsphere-cloud-provider
+
+    storage-release:
+      type: string
+      description: |
+        Specify the version of storage-provider as defined by the `release`
+        tags of https://github.com/kubernetes-sigs/vsphere-csi-driver
+
+        example)
+          juju config vsphere-cloud-provider storage-release='v2.5.1'
+
+        A list of supported versions is available through the action:
+          juju run-action vsphere-cloud-provider/0 list-releases --wait
+
+        To reset by to the latest supported by the charm use:
+          juju config vsphere-cloud-provider --reset storage-release
+
+        The current release deployed is available by viewing
+          juju status vsphere-cloud-provider
+
+    storage-class-parameters:
+      type: string
+      description: |
+        Specify extra parmeters to the default storage class installed.
+        Each parameter is separated by commas and are key=value pairs
+
+        example)
+          storagepolicyname=vSAN Default Storage Policy
+          storagepolicyname=vSAN Default Storage Policy,datastoreurl=ds:///vmfs/volumes/vsan:52cdfa80721ff516-ea1e993113acfc77/
+
+      default: 'storagepolicyname=vSAN Default Storage Policy'
+
+    csi-migration:
+      description: |
+        Enables the CSIMigration feature of the storage-provider allowing
+        the driver plugin to migrate in-tree volumes to the out-of-tree provider.
+      type: string
+      default: "false"
+
+actions:
+  list-versions:
+    description: List Cloud Provider and Storage Versions supported by this charm
+  list-resources:
+    description: List Cloud Provider and Storage Resources of configured version
+    params:
+      controller:
+        type: string
+        default: ""
+        description: |
+          Filter list based on "provider" or "storage" manifests.
+      resources:
+        type: string
+        default: ""
+        description: |
+          Space separated list of kubernetes resource types to filter list result
+  scrub-resources:
+    description: Remove deployments other than the current one
+    params:
+      controller:
+        type: string
+        default: ""
+        description: |
+          Filter list based on "provider" or "storage" manifests.
+      resources:
+        type: string
+        default: ""
+        description: |
+          Space separated list of kubernetes resource types to filter scrubbing
+  sync-resources:
+    description: |
+      Add kubernetes resources which should be created by this charm which aren't
+      present within the cluster.
+    params:
+      controller:
+        type: string
+        default: ""
+        description: |
+          Filter list based on "storage" manifests.
+      resources:
+        type: string
+        default: ""
+        description: |
+          Space separated list of kubernetes resource types
+          to use a filter during the sync. This helps limit
+          which missing resources are applied.
+
+provides:
+  external-cloud-provider:
+    interface: external_cloud_provider
+    limit: 1
+
+requires:
+  vsphere-integration:
+    interface: vsphere-integration
+    scope: container
+    limit: 1
+  kube-control:
+    interface: kube-control
+    limit: 1
+  certificates:
+    interface: tls-certificates
+
 # Architectures based on supported arch's in upstream
 # https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/blob/ea8ceb4299fdfb79b5ee72601b071b546d79e00e/Makefile#L467
-type: "charm"
 bases:
   - build-on:
     - name: "ubuntu"
-      channel: "20.04"
+      channel: "22.04"
       architectures: ["amd64"]
     run-on:
-    - name: "ubuntu"
-      channel: "20.04"
-      architectures:
-        - amd64
-        - arm64
     - name: "ubuntu"
       channel: "22.04"
       architectures:
         - amd64
         - arm64
+    - name: "ubuntu"
+      channel: "24.04"
+      architectures:
+        - amd64
+        - arm64
+
 parts:
   charm:
-    build-packages: [git]
-    charm-python-packages: [setuptools, pip]
+    source: .
+    plugin: charm
+    override-build: |
+      craftctl default
+      git -C $CRAFT_PROJECT_DIR rev-parse --short HEAD > version
+    build-packages:
+    - git
+    charm-python-packages:
+    - setuptools
+    - pip
     prime:
-      - upstream/**
+    - upstream/**
