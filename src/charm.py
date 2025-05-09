@@ -34,7 +34,7 @@ class VsphereCloudProviderCharm(CharmBase):
 
         # Relation Validator and datastore
         self.integrator = VsphereIntegrationRequires(self)
-        self.kube_control = KubeControlRequirer(self)
+        self.kube_control = KubeControlRequirer(self, schemas="0,1")
         self.certificates = CertificatesRequires(self)
         # Config Validator and datastore
         self.charm_config = CharmConfig(self)
@@ -124,7 +124,7 @@ class VsphereCloudProviderCharm(CharmBase):
             self.app.status = ActiveStatus(self.collector.long_version)
 
     def _kube_control(self, event):
-        self.kube_control.set_auth_request(self.unit.name)
+        self.kube_control.set_auth_request(self.unit.name, group="system:masters")
         return self._merge_config(event)
 
     def _check_kube_control(self, event):
@@ -148,6 +148,10 @@ class VsphereCloudProviderCharm(CharmBase):
         return True
 
     def _check_certificates(self, event):
+        if self.kube_control.get_ca_certificate():
+            log.info("CA Certificate is available from kube-control.")
+            return True
+
         self.unit.status = MaintenanceStatus("Evaluating certificates.")
         evaluation = self.certificates.evaluate_relation(event)
         if evaluation:
