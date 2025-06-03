@@ -12,7 +12,7 @@ jobs:
   lint-unit:
     name: Lint Unit
     uses: charmed-kubernetes/workflows/.github/workflows/lint-unit.yaml@main
-    needs: 
+    needs:
       - call-inclusive-naming-check
     with:
       with-uv: true
@@ -20,22 +20,26 @@ jobs:
 
   integration-test:
     name: VSphere Integration Test
-    needs: 
+    needs:
       - lint-unit
     runs-on: self-hosted
     timeout-minutes: 90
+    strategy:
+      max-parallel: 1
+      matrix:
+        series: [jammy, noble]
     steps:
       - name: Check out code
         uses: actions/checkout@v4
 
       - name: Read charmcraft version file
         id: charmcraft
-        run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT        
+        run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
 
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.8
+          python-version: '3.10'
 
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
@@ -53,7 +57,7 @@ jobs:
             --model-default force-vm-hardware-version=17
 
       - name: Run test
-        run: tox -e integration -- --basetemp=/home/ubuntu/pytest
+        run: tox -e integration -- --series=${{matrix.series}} --basetemp=/home/ubuntu/pytest
 
       - name: Setup Debug Artifact Collection
         if: ${{ failure() }}

@@ -6,3 +6,4 @@ pydantic==1.*
 ops.manifest>=1.1.0,<2.0.0
 ops.interface-kube-control==0.2.0
 ops.interface-tls-certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates.git@236e089493c96feac5ea1a8617b1059a4477a04e#subdirectory=ops
+setuptools == 79.0.1
