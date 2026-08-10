@@ -67,7 +67,7 @@ config:
         If unset, the image registry from the kube-control relation will be used.
 
         example)
-          juju config vsphere-cloud-provider image-registry='rocks.canonical.com:443/cdk'
+          juju config vsphere-cloud-provider image-registry='ghcr.io/canonical/cdk'
 
           juju config vsphere-cloud-provider --reset image-registry
 

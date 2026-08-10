@@ -59,7 +59,7 @@ def kube_control():
     with mock.patch("charm.KubeControlRequirer") as mocked:
         kube_control = mocked.return_value
         kube_control.evaluate_relation.return_value = None
-        kube_control.get_registry_location.return_value = "rocks.canonical.com/cdk"
+        kube_control.get_registry_location.return_value = "ghcr.io/canonical/cdk"
         kube_control.get_controller_taints.return_value = []
         kube_control.get_controller_labels.return_value = []
         kube_control.relation.app.name = "kubernetes-control-plane"
