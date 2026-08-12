@@ -46,3 +46,6 @@ copyright-regexp = "Copyright\\s\\d{4}([-,]\\d{4})*\\s+%(author)s"
 [tool.mypy]
 mypy_path = "src:lib"
 ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = [".tox", ".venv", "venv"]
