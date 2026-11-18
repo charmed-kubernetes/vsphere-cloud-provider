@@ -73,6 +73,7 @@ config:
 
     provider-release:
       type: string
+      default: v1.36
       description: |
         Specify the version of cloud-provider as defined by the `releases`
         directory of https://github.com/kubernetes/cloud-provider-vsphere/
@@ -83,7 +84,7 @@ config:
         A list of supported versions is available through the action:
           juju run-action vsphere-cloud-provider/0 list-releases --wait
 
-        To reset by to the latest supported by the charm use:
+        To reset to the CK 1.36 default use:
           juju config vsphere-cloud-provider --reset provider-release
 
         The current release deployed is available by viewing
@@ -91,6 +92,7 @@ config:
 
     storage-release:
       type: string
+      default: v3.8.0
       description: |
         Specify the version of storage-provider as defined by the `release`
         tags of https://github.com/kubernetes-sigs/vsphere-csi-driver
@@ -101,7 +103,7 @@ config:
         A list of supported versions is available through the action:
           juju run-action vsphere-cloud-provider/0 list-releases --wait
 
-        To reset by to the latest supported by the charm use:
+        To reset to the CK 1.36 default use:
           juju config vsphere-cloud-provider --reset storage-release
 
         The current release deployed is available by viewing

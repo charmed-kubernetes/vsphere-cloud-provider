@@ -3,6 +3,7 @@
 #
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
+import base64
 import unittest.mock as mock
 from pathlib import Path
 
@@ -210,3 +211,158 @@ def test_install_or_upgrade_apierror(harness: Harness, lk_client, api_error_klas
     charm._install_or_upgrade(mock_event)
     mock_event.defer.assert_called_once()
     assert isinstance(charm.unit.status, WaitingStatus)
+
+
+@pytest.mark.parametrize(
+    "releases",
+    [
+        {},  # Exercise the effective defaults, not just explicit overrides.
+        {"provider-release": "v1.35", "storage-release": "v3.5.1"},
+        {"provider-release": "v1.36", "storage-release": "v3.6.5"},
+        {"provider-release": "v1.37", "storage-release": "v3.7.5"},
+    ],
+)
+@pytest.mark.usefixtures("integrator", "certificates", "kube_control")
+def test_real_bundles_preserve_charm_configuration(harness, releases):
+    """New upstream bundles must still accept credentials, scheduling and registry patches."""
+    harness.begin()
+    harness.update_config(
+        {
+            "server": "vsphere.local",
+            "username": "alice",
+            "password": "s3cr3t",
+            "datacenter": "dc1",
+            "control-node-selector": "juju-application=kubernetes-control-plane",
+            **releases,
+        }
+    )
+    resources = {
+        (wrapped.resource.kind, wrapped.resource.metadata.name): wrapped.resource
+        for manifests in harness.charm.collector.manifests.values()
+        for wrapped in manifests.resources
+    }
+    provider_secret = resources["Secret", "vsphere-cloud-secret"]
+    assert provider_secret.stringData == {
+        "vsphere.local.username": "alice",
+        "vsphere.local.password": "s3cr3t",
+    }
+    provider_config = yaml.safe_load(
+        resources["ConfigMap", "vsphere-cloud-config"].data["vsphere.conf"]
+    )
+    assert provider_config["vcenter"]["dc1"]["server"] == "vsphere.local"
+    storage_secret = resources["Secret", "vsphere-config-secret"]
+    secret_config = base64.b64decode(storage_secret.data["csi-vsphere.conf"]).decode()
+    assert '[VirtualCenter "vsphere.local"]' in secret_config
+    assert 'user = "alice"' in secret_config
+    assert 'password = "s3cr3t"' in secret_config
+    assert 'datacenters = "dc1"' in secret_config
+
+    for kind, name in (
+        ("DaemonSet", "vsphere-cloud-controller-manager"),
+        ("Deployment", "vsphere-csi-controller"),
+    ):
+        pod_spec = resources[kind, name].spec.template.spec
+        assert pod_spec.nodeSelector == {"juju-application": "kubernetes-control-plane"}
+        assert any(t.key == "node-role.kubernetes.io/control-plane" for t in pod_spec.tolerations)
+    assert resources["Deployment", "vsphere-csi-controller"].spec.replicas == 2
+    feature_states = resources["ConfigMap", "internal-feature-states.csi.vsphere.vmware.com"]
+    assert feature_states.data["csi-migration"] == "false"
+    storage_class = resources["StorageClass", "csi-vsphere-default"]
+    assert storage_class.parameters == {"storagepolicyname": "vSAN Default Storage Policy"}
+
+    for (kind, _), resource in resources.items():
+        if kind in ("DaemonSet", "Deployment"):
+            for container in resource.spec.template.spec.containers:
+                assert container.image.startswith("ghcr.io/canonical/cdk/")
+
+
+def _legacy_stored_hash(charm):
+    """Hash the manifest config the way the revision without a schema default stored it.
+
+    Before `provider-release`/`storage-release` gained a charmcraft default, an unset
+    option left `config["release"]` as None, so the stored hash was identical no matter
+    which release the bundled version file selected.
+    """
+    total = 0
+    for controller in charm.collector.manifests.values():
+        legacy = dict(controller.config)
+        legacy["release"] = None
+        with mock.patch.object(type(controller), "config", mock.PropertyMock(return_value=legacy)):
+            total += controller.hash()
+    return total
+
+
+def _image_identity(image):
+    """Reduce an image to name:tag, so rewritten registry prefixes compare equal."""
+    return image.rsplit("/", 1)[-1]
+
+
+def _bundled_images(controller):
+    """Collect the container images the current release's manifest files declare."""
+    bundle = controller.manifest_path / controller.current_release
+    images = set()
+    for path in sorted(bundle.glob("*.yaml")):
+        for resource in yaml.safe_load_all(path.read_text()):
+            if not resource or resource.get("kind") not in ("DaemonSet", "Deployment"):
+                continue
+            for container in resource["spec"]["template"]["spec"]["containers"]:
+                images.add(_image_identity(container["image"]))
+    return images
+
+
+def test_schema_default_matches_version_file():
+    """The charmcraft config default and the bundled version file must select the same release."""
+    options = yaml.safe_load(Path("charmcraft.yaml").read_text())["config"]["options"]
+    for option, version_file in (
+        ("provider-release", "upstream/cloud_provider/version"),
+        ("storage-release", "upstream/cloud_storage/version"),
+    ):
+        default = options[option]["default"]
+        assert default == Path(version_file).read_text().strip()
+        assert Path(f"{Path(version_file).parent}/manifests/{default}").is_dir()
+
+
+@pytest.mark.usefixtures("integrator", "certificates", "kube_control")
+def test_refresh_rolls_out_new_schema_default(harness, lk_client):
+    """A refresh with no release configured must re-apply manifests for the new defaults."""
+    harness.begin()
+    harness.update_config(
+        {
+            "server": "vsphere.local",
+            "username": "alice",
+            "password": "s3cr3t",
+            "datacenter": "dc1",
+            "control-node-selector": "juju-application=kubernetes-control-plane",
+        }
+    )
+    charm = harness.charm
+
+    # Emulate the previously deployed revision, which stored a release-insensitive hash.
+    legacy_hash = _legacy_stored_hash(charm)
+    assert legacy_hash != charm.stored.config_hash, (
+        "the stored hash must change when the schema default moves, "
+        "otherwise a default-only refresh is skipped"
+    )
+    charm.stored.config_hash = legacy_hash
+    charm.stored.deployed = True
+    lk_client.apply.reset_mock()
+
+    charm.on.config_changed.emit()
+
+    assert charm.stored.deployed
+    assert charm.stored.config_hash != legacy_hash
+    applied = [call.args[0] for call in lk_client.apply.call_args_list]
+    applied_images = {
+        _image_identity(container.image)
+        for resource in applied
+        if resource.kind in ("DaemonSet", "Deployment")
+        for container in resource.spec.template.spec.containers
+    }
+    for controller in charm.collector.manifests.values():
+        assert controller.current_release == controller.default_release
+        bundled = _bundled_images(controller)
+        assert bundled, f"no images found in bundled {controller.name} manifests"
+        assert bundled <= applied_images, (
+            f"{controller.name} release {controller.current_release} was not rolled out; "
+            f"missing {sorted(bundled - applied_images)}"
+        )

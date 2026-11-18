@@ -8,6 +8,33 @@ This subordinate charm manages the cloud-provider and vsphere-csi-driver compone
 * vSphere infrastructure must support version 15+ VMs (tested on version 17)
    * See [vmware compatibility docs](https://docs.vmware.com/en/VMware-vSphere/6.7/com.vmware.vsphere.vm_admin.doc/GUID-789C3913-1053-4850-A0F0-E29C3D32B6DA.html)
 
+### Component compatibility
+
+The defaults target Charmed Kubernetes 1.36: CPI `v1.36` (the upstream release
+directory, containing image `v1.36.0`) and CSI `v3.8.0`. CPI compatibility is
+[guaranteed only for the matching Kubernetes minor](https://github.com/kubernetes/cloud-provider-vsphere/blob/v1.36.0/README.md#compatibility-with-kubernetes).
+CSI `v3.8.0` [supports Kubernetes 1.34 through 1.36](https://github.com/kubernetes-sigs/vsphere-csi-driver/releases/tag/v3.8.0).
+Other bundled releases remain available for explicitly configured deployments;
+being bundled does not imply support on Kubernetes 1.36.
+
+Check the [vendor vSphere compatibility matrix](https://techdocs.broadcom.com/us/en/vmware-cis/vsphere/container-storage-plugin/3-0/getting-started-with-vmware-vsphere-container-storage-plug-in-3-0/vsphere-container-storage-plug-in-concepts/compatibility-matrix-for-vsphere-container-storage-plug-in.html)
+and the prerequisites for the storage features you use. Its minimum recommended
+CSI versions include 3.6.0 for vSphere 9.0, 3.3.0 for 8.0 Update 3, 3.0.0 for
+8.0 Update 2, and 2.4 for 7.0 Update 3. The vendor documents backward/forward
+vSphere compatibility and upgrades from lower to higher CSI versions, but its
+published matrix does not yet list CSI 3.8.0 explicitly. Confirm the exact
+vCenter/ESX release and feature combination before production rollout; VM
+hardware version alone is not sufficient compatibility evidence.
+
+For upgrades, follow the [vendor CSI upgrade guidance](https://techdocs.broadcom.com/us/en/vmware-cis/vsphere/container-storage-plugin/3-0/getting-started-with-vmware-vsphere-container-storage-plug-in-3-0/vsphere-container-storage-plug-in-deployment/upgrading-vsphere-container-storage-plug-in.html),
+including required vSphere privileges and topology/storage-class considerations.
+Pin both `provider-release` and `storage-release` before upgrading the charm on
+an older Kubernetes cluster; otherwise the new defaults take effect. Move the
+component pins in step with a supported Kubernetes upgrade, and validate both
+existing-volume I/O and new-volume provisioning. Kubernetes 1.33 and older are
+outside the new CSI default's supported range, so do not adopt that default
+before reaching a supported Kubernetes version.
+
 ## Usage
 
 The charm requires vSphere credentials and connection information, which
